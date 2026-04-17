@@ -1,0 +1,951 @@
+{
+  "state": {
+    "geoType": "grid",
+    "geoParams": [
+      6.5,
+      10,
+      120,
+      60,
+      0
+    ],
+    "solidSubdiv": 2,
+    "mathFormula": "sin(sqrt(x*x + z*z) * a) * c",
+    "mathVars": {
+      "a": 2,
+      "b": 1,
+      "c": 0.5
+    },
+    "parametricFormulas": {
+      "x": "v * cos(u)",
+      "y": "v * sin(u)",
+      "z": "u * 0.5"
+    },
+    "landscape": {
+      "seed": 68,
+      "noiseType": "simplex",
+      "amplitude": 1.5,
+      "frequency": 0.05,
+      "octaves": 4,
+      "persistence": 0.5,
+      "lacunarity": 2,
+      "seaLevel": 0,
+      "noiseScale": 4.9
+    },
+    "objRot": {
+      "x": 90,
+      "y": 0,
+      "z": 0
+    },
+    "clip": {
+      "enabled": false,
+      "axis": "x",
+      "pos": 0
+    },
+    "spline": {
+      "force": false,
+      "subdiv": 12
+    },
+    "gridUV": {
+      "u": true,
+      "v": true
+    },
+    "noise": {
+      "enabled": true,
+      "noiseType": "turbulence",
+      "amp": 0.3,
+      "freq": 0.4,
+      "axis": "z",
+      "seed": 1
+    },
+    "twist": {
+      "enabled": false,
+      "angle": 0.65,
+      "axis": "z"
+    },
+    "wave": {
+      "enabled": false,
+      "int": 2,
+      "freq": 10,
+      "axis": "y"
+    },
+    "bulge": {
+      "enabled": false,
+      "str": 0.5,
+      "axis": "all"
+    },
+    "bend": {
+      "enabled": false,
+      "amt": 0.5,
+      "axis": "y"
+    },
+    "taper": {
+      "enabled": false,
+      "amt": 0.5,
+      "axis": "y"
+    },
+    "ripple": {
+      "enabled": false,
+      "amp": 0.2,
+      "freq": 5,
+      "axis": "y"
+    },
+    "spherify": {
+      "enabled": false,
+      "str": 0.5
+    },
+    "skew": {
+      "enabled": false,
+      "amt": 0.5,
+      "axis": "y"
+    },
+    "deformationOrder": [
+      "noise",
+      "twist",
+      "wave",
+      "bulge",
+      "bend",
+      "taper",
+      "ripple",
+      "spherify",
+      "skew"
+    ],
+    "reorderMode": false,
+    "cam": {
+      "x": 0,
+      "y": 1.9038196065608086,
+      "z": 14.902726296355763,
+      "rotX": -4.999999999999998,
+      "rotY": 0,
+      "fov": 12,
+      "target": {
+        "x": 0,
+        "y": 0.6,
+        "z": 0
+      }
+    },
+    "autoRotate": false,
+    "svgPreview": false,
+    "style": "dots-solid",
+    "hiddenSettings": {
+      "bias": 0.1,
+      "epsilon": 0.01,
+      "splineRes": 4,
+      "inflate": 0,
+      "minLen": 0
+    },
+    "legacyHiddenLine": false,
+    "properOrder": true,
+    "zDepth": {
+      "color": true,
+      "opacity": true,
+      "dof": true
+    },
+    "gradMode": "camera",
+    "gradRot": {
+      "x": 0,
+      "y": 0
+    },
+    "baseColor": "#007aff",
+    "colorNear": "#008cb4",
+    "colorFar": "#002e7a",
+    "gradStart": 0,
+    "gradEnd": 1,
+    "opGradStart": 0.34418604651162793,
+    "opGradEnd": 1,
+    "strokeWidth": 1,
+    "dotSize": 6,
+    "dof": {
+      "focus": 0.42,
+      "intensity": 0.2,
+      "aperture": 20,
+      "ignoreNear": false,
+      "linkCurves": false,
+      "smoothCurve": false,
+      "opCurve": [
+        {
+          "x": 0,
+          "y": 0.0023809523809523725
+        },
+        {
+          "x": 0.030555555555555555,
+          "y": 0
+        },
+        {
+          "x": 0.99,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 0
+        }
+      ],
+      "sizeCurve": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 1,
+          "y": 1
+        }
+      ]
+    }
+  },
+  "presets": [
+    {
+      "geoType": "cube",
+      "geoParams": [
+        5,
+        5,
+        5,
+        20,
+        20,
+        50,
+        1
+      ],
+      "solidSubdiv": 2,
+      "mathFormula": "sin(x*a) * cos(z*b) * c",
+      "mathVars": {
+        "a": 1,
+        "b": 1,
+        "c": 1
+      },
+      "parametricFormulas": {
+        "x": "(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)",
+        "y": "(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)",
+        "z": "sin(u/2)*sin(v) + cos(u/2)*sin(2*v)"
+      },
+      "landscape": {
+        "seed": 68,
+        "noiseType": "simplex",
+        "amplitude": 1.5,
+        "frequency": 0.05,
+        "octaves": 4,
+        "persistence": 0.5,
+        "lacunarity": 2,
+        "seaLevel": 0,
+        "noiseScale": 4.9
+      },
+      "objRot": {
+        "x": 0,
+        "y": 0,
+        "z": 45
+      },
+      "clip": {
+        "enabled": false,
+        "axis": "x",
+        "pos": 0
+      },
+      "spline": {
+        "force": false,
+        "subdiv": 12
+      },
+      "gridUV": {
+        "u": true,
+        "v": true
+      },
+      "noise": {
+        "enabled": false,
+        "noiseType": "simplex",
+        "amp": 0.2,
+        "freq": 1,
+        "axis": "all",
+        "seed": 1
+      },
+      "twist": {
+        "enabled": true,
+        "angle": 0.65,
+        "axis": "z"
+      },
+      "wave": {
+        "enabled": false,
+        "int": 0.5,
+        "freq": 2,
+        "axis": "z"
+      },
+      "bulge": {
+        "enabled": false,
+        "str": 0.5,
+        "axis": "all"
+      },
+      "bend": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "taper": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "ripple": {
+        "enabled": false,
+        "amp": 0.2,
+        "freq": 5,
+        "axis": "y"
+      },
+      "spherify": {
+        "enabled": false,
+        "str": 0.5
+      },
+      "skew": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "deformationOrder": [
+        "noise",
+        "twist",
+        "wave",
+        "bulge",
+        "bend",
+        "taper",
+        "ripple",
+        "spherify",
+        "skew"
+      ],
+      "reorderMode": false,
+      "cam": {
+        "x": -2.372851457055747e-66,
+        "y": 1.3569940012274723e-16,
+        "z": 2.216139383489614,
+        "rotX": -3.508354649267438e-15,
+        "rotY": -6.134739308981707e-65,
+        "fov": 106,
+        "target": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "autoRotate": false,
+      "svgPreview": true,
+      "style": "dots-solid",
+      "hiddenSettings": {
+        "bias": 0,
+        "epsilon": 0.001,
+        "splineRes": 8,
+        "inflate": 0,
+        "minLen": 0
+      },
+      "legacyHiddenLine": false,
+      "properOrder": false,
+      "zDepth": {
+        "color": true,
+        "opacity": false,
+        "dof": true
+      },
+      "gradMode": "camera",
+      "gradRot": {
+        "x": 0,
+        "y": 0
+      },
+      "baseColor": "#007aff",
+      "colorNear": "#00fdff",
+      "colorFar": "#ff40ff",
+      "gradStart": 0,
+      "gradEnd": 1,
+      "strokeWidth": 1,
+      "dotSize": 6,
+      "dof": {
+        "focus": 0.76,
+        "intensity": 0.3,
+        "aperture": 50,
+        "ignoreNear": false,
+        "linkCurves": false,
+        "smoothCurve": true,
+        "opCurve": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 0
+          }
+        ],
+        "sizeCurve": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 1
+          }
+        ]
+      }
+    },
+    {
+      "geoType": "math",
+      "geoParams": [
+        8,
+        100
+      ],
+      "solidSubdiv": 2,
+      "mathFormula": "sin(sqrt(x*x + z*z) * a) * c",
+      "mathVars": {
+        "a": 2,
+        "b": 1,
+        "c": 0.5
+      },
+      "parametricFormulas": {
+        "x": "v * cos(u)",
+        "y": "v * sin(u)",
+        "z": "u * 0.5"
+      },
+      "landscape": {
+        "seed": 68,
+        "noiseType": "simplex",
+        "amplitude": 1.5,
+        "frequency": 0.05,
+        "octaves": 4,
+        "persistence": 0.5,
+        "lacunarity": 2,
+        "seaLevel": 0,
+        "noiseScale": 4.9
+      },
+      "objRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "clip": {
+        "enabled": false,
+        "axis": "x",
+        "pos": 0
+      },
+      "spline": {
+        "force": false,
+        "subdiv": 12
+      },
+      "gridUV": {
+        "u": true,
+        "v": true
+      },
+      "noise": {
+        "enabled": false,
+        "noiseType": "simplex",
+        "amp": 0.2,
+        "freq": 1,
+        "axis": "all",
+        "seed": 1
+      },
+      "twist": {
+        "enabled": false,
+        "angle": 0.65,
+        "axis": "z"
+      },
+      "wave": {
+        "enabled": false,
+        "int": 0.5,
+        "freq": 2,
+        "axis": "z"
+      },
+      "bulge": {
+        "enabled": false,
+        "str": 0.5,
+        "axis": "all"
+      },
+      "bend": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "taper": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "ripple": {
+        "enabled": false,
+        "amp": 0.2,
+        "freq": 5,
+        "axis": "y"
+      },
+      "spherify": {
+        "enabled": false,
+        "str": 0.5
+      },
+      "skew": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "deformationOrder": [
+        "noise",
+        "twist",
+        "wave",
+        "bulge",
+        "bend",
+        "taper",
+        "ripple",
+        "spherify",
+        "skew"
+      ],
+      "reorderMode": false,
+      "cam": {
+        "x": 21.812274081136433,
+        "y": 21.61085990584894,
+        "z": 24.794886666419643,
+        "rotX": -41.98141827643107,
+        "rotY": 33.182347772273694,
+        "fov": 12,
+        "target": {
+          "x": 0,
+          "y": -0.7,
+          "z": 0
+        }
+      },
+      "autoRotate": false,
+      "svgPreview": true,
+      "style": "dots-solid",
+      "hiddenSettings": {
+        "bias": 0,
+        "epsilon": 0.01,
+        "splineRes": 3,
+        "inflate": 0.001,
+        "minLen": 0
+      },
+      "legacyHiddenLine": false,
+      "properOrder": true,
+      "zDepth": {
+        "color": true,
+        "opacity": false,
+        "dof": true
+      },
+      "gradMode": "camera",
+      "gradRot": {
+        "x": 0,
+        "y": 0
+      },
+      "baseColor": "#007aff",
+      "colorNear": "#ff2600",
+      "colorFar": "#0433ff",
+      "gradStart": 0,
+      "gradEnd": 1,
+      "strokeWidth": 1,
+      "dotSize": 6,
+      "dof": {
+        "focus": 0.42,
+        "intensity": 0.2,
+        "aperture": 50,
+        "ignoreNear": false,
+        "linkCurves": false,
+        "smoothCurve": false,
+        "opCurve": [
+          {
+            "x": 0,
+            "y": 0.0023809523809523725
+          },
+          {
+            "x": 0.030555555555555555,
+            "y": 0
+          },
+          {
+            "x": 0.08055555555555556,
+            "y": 1
+          },
+          {
+            "x": 1,
+            "y": 1
+          }
+        ],
+        "sizeCurve": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 1
+          }
+        ]
+      }
+    },
+    {
+      "geoType": "grid",
+      "geoParams": [
+        6.5,
+        10,
+        120,
+        60,
+        0
+      ],
+      "solidSubdiv": 2,
+      "mathFormula": "sin(sqrt(x*x + z*z) * a) * c",
+      "mathVars": {
+        "a": 2,
+        "b": 1,
+        "c": 0.5
+      },
+      "parametricFormulas": {
+        "x": "v * cos(u)",
+        "y": "v * sin(u)",
+        "z": "u * 0.5"
+      },
+      "landscape": {
+        "seed": 68,
+        "noiseType": "simplex",
+        "amplitude": 1.5,
+        "frequency": 0.05,
+        "octaves": 4,
+        "persistence": 0.5,
+        "lacunarity": 2,
+        "seaLevel": 0,
+        "noiseScale": 4.9
+      },
+      "objRot": {
+        "x": 90,
+        "y": 0,
+        "z": 0
+      },
+      "clip": {
+        "enabled": false,
+        "axis": "x",
+        "pos": 0
+      },
+      "spline": {
+        "force": false,
+        "subdiv": 12
+      },
+      "gridUV": {
+        "u": true,
+        "v": true
+      },
+      "noise": {
+        "enabled": true,
+        "noiseType": "turbulence",
+        "amp": 0.3,
+        "freq": 0.4,
+        "axis": "z",
+        "seed": 1
+      },
+      "twist": {
+        "enabled": false,
+        "angle": 0.65,
+        "axis": "z"
+      },
+      "wave": {
+        "enabled": false,
+        "int": 2,
+        "freq": 10,
+        "axis": "y"
+      },
+      "bulge": {
+        "enabled": false,
+        "str": 0.5,
+        "axis": "all"
+      },
+      "bend": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "taper": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "ripple": {
+        "enabled": false,
+        "amp": 0.2,
+        "freq": 5,
+        "axis": "y"
+      },
+      "spherify": {
+        "enabled": false,
+        "str": 0.5
+      },
+      "skew": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "deformationOrder": [
+        "noise",
+        "twist",
+        "wave",
+        "bulge",
+        "bend",
+        "taper",
+        "ripple",
+        "spherify",
+        "skew"
+      ],
+      "reorderMode": false,
+      "cam": {
+        "x": 0,
+        "y": 1.9038196065608086,
+        "z": 14.902726296355763,
+        "rotX": -4.999999999999998,
+        "rotY": 0,
+        "fov": 12,
+        "target": {
+          "x": 0,
+          "y": 0.6,
+          "z": 0
+        }
+      },
+      "autoRotate": false,
+      "svgPreview": true,
+      "style": "dots-solid",
+      "hiddenSettings": {
+        "bias": 0.1,
+        "epsilon": 0.01,
+        "splineRes": 4,
+        "inflate": 0,
+        "minLen": 0
+      },
+      "legacyHiddenLine": false,
+      "properOrder": true,
+      "zDepth": {
+        "color": true,
+        "opacity": true,
+        "dof": true
+      },
+      "gradMode": "camera",
+      "gradRot": {
+        "x": 0,
+        "y": 0
+      },
+      "baseColor": "#007aff",
+      "colorNear": "#008cb4",
+      "colorFar": "#002e7a",
+      "gradStart": 0,
+      "gradEnd": 1,
+      "opGradStart": 0.34418604651162793,
+      "opGradEnd": 1,
+      "strokeWidth": 1,
+      "dotSize": 6,
+      "dof": {
+        "focus": 0.42,
+        "intensity": 0.2,
+        "aperture": 20,
+        "ignoreNear": false,
+        "linkCurves": false,
+        "smoothCurve": false,
+        "opCurve": [
+          {
+            "x": 0,
+            "y": 0.0023809523809523725
+          },
+          {
+            "x": 0.030555555555555555,
+            "y": 0
+          },
+          {
+            "x": 0.99,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 0
+          }
+        ],
+        "sizeCurve": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 1
+          }
+        ]
+      }
+    },
+    {
+      "geoType": "torus",
+      "geoParams": [
+        1.1,
+        1,
+        54,
+        87
+      ],
+      "solidSubdiv": 2,
+      "mathFormula": "sin(sqrt(x*x + z*z) * a) * c",
+      "mathVars": {
+        "a": 2,
+        "b": 1,
+        "c": 0.5
+      },
+      "parametricFormulas": {
+        "x": "cos(u) * sin(v)",
+        "y": "sin(u) * sin(v)",
+        "z": "cos(v) + log(tan(v/2)) + 0.2*u"
+      },
+      "landscape": {
+        "seed": 68,
+        "noiseType": "simplex",
+        "amplitude": 1.9,
+        "frequency": 0.03,
+        "octaves": 4,
+        "persistence": 0.5,
+        "lacunarity": 2,
+        "seaLevel": 0,
+        "noiseScale": 5.7
+      },
+      "objRot": {
+        "x": 90,
+        "y": 0,
+        "z": 0
+      },
+      "clip": {
+        "enabled": false,
+        "axis": "x",
+        "pos": 0
+      },
+      "spline": {
+        "force": false,
+        "subdiv": 12
+      },
+      "gridUV": {
+        "u": true,
+        "v": true
+      },
+      "noise": {
+        "enabled": false,
+        "noiseType": "turbulence",
+        "amp": 0.3,
+        "freq": 0.4,
+        "axis": "z",
+        "seed": 1
+      },
+      "twist": {
+        "enabled": false,
+        "angle": 0.65,
+        "axis": "z"
+      },
+      "wave": {
+        "enabled": false,
+        "int": 2,
+        "freq": 10,
+        "axis": "y"
+      },
+      "bulge": {
+        "enabled": false,
+        "str": 0.5,
+        "axis": "all"
+      },
+      "bend": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "taper": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "ripple": {
+        "enabled": false,
+        "amp": 0.2,
+        "freq": 5,
+        "axis": "y"
+      },
+      "spherify": {
+        "enabled": false,
+        "str": 0.5
+      },
+      "skew": {
+        "enabled": false,
+        "amt": 0.5,
+        "axis": "y"
+      },
+      "deformationOrder": [
+        "noise",
+        "twist",
+        "wave",
+        "bulge",
+        "bend",
+        "taper",
+        "ripple",
+        "spherify",
+        "skew"
+      ],
+      "reorderMode": false,
+      "cam": {
+        "x": 3.047642606160625e-193,
+        "y": 9.614187614976938e-17,
+        "z": 1.570115991267149,
+        "rotX": -3.508354649267438e-15,
+        "rotY": 1.1121284017770656e-191,
+        "fov": 105,
+        "target": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        }
+      },
+      "autoRotate": false,
+      "svgPreview": true,
+      "style": "hidden-line",
+      "hiddenSettings": {
+        "bias": 0,
+        "epsilon": 0.01,
+        "splineRes": 8,
+        "inflate": 0,
+        "minLen": 0
+      },
+      "legacyHiddenLine": false,
+      "properOrder": true,
+      "zDepth": {
+        "color": true,
+        "opacity": false,
+        "dof": false
+      },
+      "gradMode": "camera",
+      "gradRot": {
+        "x": 0,
+        "y": 0
+      },
+      "baseColor": "#007aff",
+      "colorNear": "#caf0fe",
+      "colorFar": "#0433ff",
+      "gradStart": 0,
+      "gradEnd": 1,
+      "opGradStart": 0.34418604651162793,
+      "opGradEnd": 1,
+      "strokeWidth": 1,
+      "dotSize": 6,
+      "dof": {
+        "focus": 0.42,
+        "intensity": 0.2,
+        "aperture": 20,
+        "ignoreNear": false,
+        "linkCurves": false,
+        "smoothCurve": false,
+        "opCurve": [
+          {
+            "x": 0,
+            "y": 0.0023809523809523725
+          },
+          {
+            "x": 0.030555555555555555,
+            "y": 0
+          },
+          {
+            "x": 0.99,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 0
+          }
+        ],
+        "sizeCurve": [
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 1,
+            "y": 1
+          }
+        ]
+      }
+    },
+    null
+  ]
+}

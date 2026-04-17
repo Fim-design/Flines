@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F'lines</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Three.js Core -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Extensions -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+</head>
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loader" class="loader-overlay" style="display:none;">
+        <div id="loader-processing">
+            <div id="loader-text">Processing...</div>
+            <div class="progress-container">
+                <div id="loader-bar" class="progress-bar"></div>
+            </div>
+            <div id="loader-details">Initializing...</div>
+            <div id="loader-stats" style="font-size:11px; color:#aaa; margin-top:4px;">Lines: 0 Dots: 0</div>
+        </div>
+        <div id="loader-result" style="display:none; text-align:center; flex-direction:column; align-items:center;">
+            <div id="loader-result-msg" style="margin-bottom:20px; font-size:16px; font-weight:600;">Export Successful</div>
+            <button id="loader-btn-ok" class="btn-primary" style="width:100px; background:#444; border:1px solid #666;">OK</button>
+            <div style="font-size:10px; color:#888; margin-top:10px;">(Press Enter)</div>
+        </div>
+    </div>
+
+    <!-- Preview Progress Overlay -->
+    <div id="preview-loader" style="display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); padding:10px 20px; border-radius:30px; border:1px solid #444; z-index:100; align-items:center; gap:15px; pointer-events:none;">
+        <div id="preview-message" style="font-size:12px; color:#fff; white-space:nowrap;">Generating Preview...</div>
+        <div style="width:100px; height:4px; background:#333; border-radius:2px; overflow:hidden;">
+            <div id="preview-bar" style="width:0%; height:100%; background:#007aff; transition:width 0.1s;"></div>
+        </div>
+        <div id="preview-stats" style="font-size:10px; color:#aaa; white-space:nowrap;">Lines: 0 Dots: 0</div>
+        <div style="font-size:10px; color:#888;">(ESC to Cancel)</div>
+    </div>
+
+    <div class="app-container">
+        <!-- Left Sidebar: Geometry & Modifiers -->
+        <aside class="sidebar left">
+            <div class="header">
+                <h2>F'lines <span class="badge">beta</span></h2>
+                <div class="header-actions">
+                    <button id="btn-save" class="btn-icon" title="Save Settings (.flines)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
+                        </svg>
+                    </button>
+                        <button id="btn-load" class="btn-icon" title="Load Settings (.flines)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                    <input type="file" id="flines-input" accept=".flines" style="display:none;">
+                </div>
+            </div>
+
+            <div class="panel-scroll">
+                <!-- Geometry Section -->
+                <div class="section collapsed">
+                    <h3 id="geometry-header" class="collapsible-header">
+                        <span><span class="arrow-icon">▼</span> GEOMETRY</span>
+                    </h3>
+                    <div id="geometry-content">
+                        <div class="control">
+                            <label>Type</label>
+                            <select id="geo-type">
+                                <option value="sphere">Sphere</option> <!-- Acts as container for Polyhedra -->
+                                <option value="cube">Cube</option>
+                                <option value="torus">Torus</option>
+                                <option value="math">y=f(x,z)</option>
+                                <option value="parametric">Parametric Surface</option>
+                                <option value="grid">Grid / Plane</option>
+                                <option value="landscape">Landscape Generator</option>
+                                <option value="custom">Upload OBJ...</option>
+                            </select>
+                        </div>
+
+                    <!-- Subtype Selector for Sphere/Polyhedra -->
+                    <div class="control" id="poly-type-container" style="display:none;">
+                        <label>Shape</label>
+                            <select id="poly-type">
+                                <option value="sphere">Sphere</option>
+                                <option value="sphere-circles">Sphere (Overlapping Circles)</option>
+                                <option value="icosahedron">Icosahedron</option>
+                                <option value="tetrahedron">Tetrahedron</option>
+                                <option value="octahedron">Octahedron</option>
+                                <option value="dodecahedron">Dodecahedron</option>
+                            </select>
+                    </div>
+
+                    <!-- Dynamic Params (v0.1 Style) -->
+                    <div id="geo-params">
+                        <!-- Injected via JS -->
+                    </div>
+
+                    <!-- Wireframe Grid Options -->
+                    <div class="control-group" id="grid-uv-controls" style="margin-top:10px;">
+                        <label style="margin-bottom:5px; display:block; color:#aaa; font-size:11px;">Grid Lines</label>
+                        <div style="display:flex; gap:15px;">
+                            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                                <input type="checkbox" id="grid-show-u" checked> U (Horiz)
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                                <input type="checkbox" id="grid-show-v" checked> V (Vert)
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Math Input Area -->
+                    <div id="math-settings-container" style="display:none; margin-bottom: 15px;">
+                        <div class="control">
+                            <label>Presets</label>
+                            <select id="math-presets" style="width:100%; background:#333; color:#fff; border:none; padding:5px; margin-bottom:10px;">
+                                <option value="" disabled selected>Select a preset...</option>
+                            </select>
+                        </div>
+                        <div class="control">
+                            <label>Formula (y = f(x, z))</label>
+                            <div style="font-size: 10px; color: #888; margin-bottom: 5px; line-height: 1.4;">
+                                <strong>Operators:</strong> + - * / % ^ ( )<br>
+                                <strong>Functions:</strong> sin, cos, tan, asin, acos, atan, abs, sqrt, cbrt, pow(b,e), exp, log, min, max, ceil, floor, round, random<br>
+                                <strong>Constants:</strong> PI, E<br>
+                                <strong>Variables:</strong> x, z (coords), a, b, c (custom)
+                            </div>
+                            <textarea id="math-formula" rows="3" style="width: 100%; background: #222; border: 1px solid #444; color: #eee; padding: 5px; font-family: monospace;">sin(x*a) * cos(z*b) * c</textarea>
+                            <div style="color: #f44336; font-size: 11px; margin-top: 4px; display: none;" id="math-error">Invalid syntax</div>
+                            
+                            <!-- Custom Variables -->
+                            <div style="display:flex; gap:10px; margin-top:8px;">
+                                <div style="flex:1;">
+                                    <label style="font-size:11px;">a =</label>
+                                    <input type="number" id="math-var-a" step="0.1" value="1.0" style="width:100%; background:#333; border:none; color:#fff; padding:4px;">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-size:11px;">b =</label>
+                                    <input type="number" id="math-var-b" step="0.1" value="1.0" style="width:100%; background:#333; border:none; color:#fff; padding:4px;">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-size:11px;">c =</label>
+                                    <input type="number" id="math-var-c" step="0.1" value="1.0" style="width:100%; background:#333; border:none; color:#fff; padding:4px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Parametric Settings -->
+                    <div id="parametric-settings-container" style="display:none; margin-bottom: 15px;">
+                        <div class="control">
+                            <label>Presets</label>
+                            <select id="param-presets" style="width:100%; background:#333; color:#fff; border:none; padding:5px; margin-bottom:10px;">
+                                <option value="" disabled selected>Select a preset...</option>
+                            </select>
+                        </div>
+                        <div class="control">
+                            <label>Parametric Formulas (u, v)</label>
+                            <div style="font-size: 10px; color: #888; margin-bottom: 5px; line-height: 1.4;">
+                                <strong>Variables:</strong> u, v (parametric coords)<br>
+                                <strong>Helpers:</strong> PI, sin, cos, etc.
+                            </div>
+                            
+                            <label style="font-size: 11px; margin-top:5px; display:block; color:#aaa;">X = f(u,v)</label>
+                            <textarea id="param-x" rows="2" style="width: 100%; background: #222; border: 1px solid #444; color: #eee; padding: 5px; font-family: monospace;">(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)</textarea>
+                            
+                            <label style="font-size: 11px; margin-top:5px; display:block; color:#aaa;">Y = f(u,v)</label>
+                            <textarea id="param-y" rows="2" style="width: 100%; background: #222; border: 1px solid #444; color: #eee; padding: 5px; font-family: monospace;">(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)</textarea>
+                            
+                            <label style="font-size: 11px; margin-top:5px; display:block; color:#aaa;">Z = f(u,v)</label>
+                            <textarea id="param-z" rows="2" style="width: 100%; background: #222; border: 1px solid #444; color: #eee; padding: 5px; font-family: monospace;">sin(u/2)*sin(v) + cos(u/2)*sin(2*v)</textarea>
+
+                            <div style="color: #f44336; font-size: 11px; margin-top: 4px; display: none;" id="param-error">Invalid syntax</div>
+                        </div>
+                    </div>
+
+                    <!-- Landscape Settings -->
+                    <div id="landscape-settings-container" style="display:none; margin-bottom: 15px;">
+                        <div class="control">
+                            <label>Seed</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-seed" min="1" max="10000" step="1" value="1">
+                                <input type="number" id="val-landscape-seed" class="val-input" value="1">
+                            </div>
+                        </div>
+                        <div class="control">
+                            <label>Noise Type</label>
+                            <select id="landscape-noise-type">
+                                <option value="simplex">Simplex Noise</option>
+                                <option value="perlin">Perlin Noise</option>
+                                <option value="worley">Worley Noise</option>
+                                <option value="value">Value Noise</option>
+                                <option value="turbulence">Turbulence Noise</option>
+                                <option value="ridged">Ridged Multifractal Noise</option>
+                            </select>
+                        </div>
+                        <div class="control">
+                            <label>Noise Scale</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-noise-scale" min="0.1" max="10" step="0.1" value="1.0">
+                                <input type="number" id="val-landscape-noise-scale" class="val-input" value="1.0">
+                            </div>
+                        </div>
+                        <div class="control">
+                            <label>Sea Level</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-sea-level" min="-2" max="2" step="0.1" value="0">
+                                <input type="number" id="val-landscape-sea-level" class="val-input" value="0">
+                            </div>
+                        </div>
+                        <div class="control">
+                            <label>Amplitude</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-amp" min="0.1" max="5" step="0.1" value="1.5">
+                                <input type="number" id="val-landscape-amp" class="val-input" value="1.5">
+                            </div>
+                        </div>
+                        <div class="control">
+                            <label>Frequency</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-freq" min="0.01" max="0.5" step="0.01" value="0.05">
+                                <input type="number" id="val-landscape-freq" class="val-input" value="0.05">
+                            </div>
+                        </div>
+                        <div class="control">
+                            <label>Octaves</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-octaves" min="1" max="10" step="1" value="4">
+                                <input type="number" id="val-landscape-octaves" class="val-input" value="4">
+                            </div>
+                        </div>
+                        <div class="control">
+                            <label>Persistence</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-persistence" min="0.1" max="1" step="0.05" value="0.5">
+                                <input type="number" id="val-landscape-persistence" class="val-input" value="0.5">
+                            </div>
+                        </div>
+                        <div class="control">
+                            <label>Lacunarity</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-lacunarity" min="1.5" max="3" step="0.1" value="2.0">
+                                <input type="number" id="val-landscape-lacunarity" class="val-input" value="2.0">
+                            </div>
+                        </div>
+                    </div>
+
+                    
+                    <!-- OBJ Upload -->
+                    <div id="obj-upload-container" style="display:none;">
+                        <div class="file-drop-area">
+                            <input type="file" id="obj-input" accept=".obj">
+                            <span>Drag OBJ here or Click</span>
+                        </div>
+                    </div>
+                    </div> <!-- End Geometry Content -->
+                </div>
+
+                <!-- Transform Section -->
+                <div class="section collapsed">
+                    <h3 id="transform-header" class="collapsible-header">
+                        <span><span class="arrow-icon">▼</span> TRANSFORM</span>
+                        <button id="btn-reset-transform" class="btn-icon" title="Reset Transform">↺</button>
+                    </h3>
+                    <div id="transform-content" style="display:none;">
+                    <div class="control">
+                        <label>Rotate Object</label>
+                        <div class="coord-row">
+                            <div class="coord-item">
+                                <label>X</label>
+                                <input type="number" id="obj-rot-x" step="1" value="0">
+                            </div>
+                            <div class="coord-item">
+                                <label>Y</label>
+                                <input type="number" id="obj-rot-y" step="1" value="0">
+                            </div>
+                            <div class="coord-item">
+                                <label>Z</label>
+                                <input type="number" id="obj-rot-z" step="1" value="0">
+                            </div>
+                        </div>
+                    </div>
+                    </div> <!-- End Transform Content -->
+
+                    <!-- Modifiers Section -->
+                    <div class="section collapsed">
+                        <h3 id="deformation-header" class="collapsible-header">
+                            <span><span class="arrow-icon">▼</span> DEFORMATION</span>
+                        </h3>
+
+                        <div id="deformation-content">                            <div style="margin-bottom: 10px;">
+                            <button id="btn-reorder-deform" class="btn-primary" style="margin-top:0; padding:8px; background:#333; border:1px solid #444; font-size:11px;">
+                                ⇄ Reorder Transformations
+                            </button>
+                        </div>
+
+                        <div id="deformation-list">
+                            <!-- Noise -->
+                            <div class="control-group" data-type="noise">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-noise">
+                                    <label for="use-noise">Noise (Simplex)</label>
+                                </div>
+                                <div class="sub-controls" id="noise-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis (Displacement)</label>
+                                        <select id="noise-axis">
+                                            <option value="all">All (XYZ)</option>
+                                            <option value="center">From Center</option>
+                                            <option value="x">X</option>
+                                            <option value="y">Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Noise Type</label>
+                                        <select id="noise-type">
+                                            <option value="simplex">Simplex Noise</option>
+                                            <option value="perlin">Perlin Noise</option>
+                                            <option value="worley">Worley Noise</option>
+                                            <option value="value">Value Noise</option>
+                                            <option value="turbulence">Turbulence Noise</option>
+                                            <option value="ridged">Ridged Multifractal Noise</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Amplitude</label>
+                                        <div class="range-row">
+                                            <input type="range" id="noise-amp" min="0" max="2" step="0.05" value="0.2">
+                                            <input type="number" id="val-noise-amp" class="val-input" value="0.2">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Frequency</label>
+                                        <div class="range-row">
+                                            <input type="range" id="noise-freq" min="0.1" max="5" step="0.1" value="1.0">
+                                            <input type="number" id="val-noise-freq" class="val-input" value="1.0">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Seed</label>
+                                        <div class="range-row">
+                                            <input type="range" id="noise-seed" min="1" max="1000" step="1" value="1">
+                                            <input type="number" id="val-noise-seed" class="val-input" value="1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Twist -->
+                            <div class="control-group" data-type="twist">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-twist">
+                                    <label for="use-twist">Twist</label>
+                                </div>
+                                <div class="sub-controls" id="twist-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis (Twist Around)</label>
+                                        <select id="twist-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Angle</label>
+                                        <div class="range-row">
+                                            <input type="range" id="twist-angle" min="-5" max="5" step="0.1" value="1">
+                                            <input type="number" id="val-twist-angle" class="val-input" value="1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Wave -->
+                            <div class="control-group" data-type="wave">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-wave">
+                                    <label for="use-wave">Sine Wave</label>
+                                </div>
+                                <div class="sub-controls" id="wave-controls" style="display:none;">
+                                        <div class="control">
+                                        <label>Axis (Displacement)</label>
+                                        <select id="wave-axis">
+                                            <option value="x">X</option>
+                                            <option value="y">Y</option>
+                                            <option value="z" selected>Z</option>
+                                        </select>
+                                    </div>
+                                        <div class="control">
+                                        <label>Intensity</label>
+                                        <div class="range-row">
+                                            <input type="range" id="wave-int" min="0" max="2" step="0.1" value="0.5">
+                                            <input type="number" id="val-wave-int" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Frequency</label>
+                                        <div class="range-row">
+                                            <input type="range" id="wave-freq" min="0" max="10" step="0.1" value="2">
+                                            <input type="number" id="val-wave-freq" class="val-input" value="2">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bulge -->
+                            <div class="control-group" data-type="bulge">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-bulge">
+                                    <label for="use-bulge">Bulge</label>
+                                </div>
+                                <div class="sub-controls" id="bulge-controls" style="display:none;">
+                                        <div class="control">
+                                        <label>Axis (Direction)</label>
+                                        <select id="bulge-axis">
+                                            <option value="all">All (Radial)</option>
+                                            <option value="x">X</option>
+                                            <option value="y">Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                        <div class="control">
+                                        <label>Strength</label>
+                                        <div class="range-row">
+                                            <input type="range" id="bulge-str" min="-1" max="2" step="0.1" value="0.5">
+                                            <input type="number" id="val-bulge-str" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bend -->
+                            <div class="control-group" data-type="bend">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-bend">
+                                    <label for="use-bend">Bend</label>
+                                </div>
+                                <div class="sub-controls" id="bend-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Main Axis</label>
+                                        <select id="bend-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Amount</label>
+                                        <div class="range-row">
+                                            <input type="range" id="bend-amt" min="-2" max="2" step="0.1" value="0.5">
+                                            <input type="number" id="val-bend-amt" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Taper -->
+                            <div class="control-group" data-type="taper">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-taper">
+                                    <label for="use-taper">Taper</label>
+                                </div>
+                                <div class="sub-controls" id="taper-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis (Height)</label>
+                                        <select id="taper-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Amount</label>
+                                        <div class="range-row">
+                                            <input type="range" id="taper-amt" min="-1" max="2" step="0.1" value="0.5">
+                                            <input type="number" id="val-taper-amt" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Ripple -->
+                            <div class="control-group" data-type="ripple">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-ripple">
+                                    <label for="use-ripple">Ripple</label>
+                                </div>
+                                <div class="sub-controls" id="ripple-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis (Displacement)</label>
+                                        <select id="ripple-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Amplitude</label>
+                                        <div class="range-row">
+                                            <input type="range" id="ripple-amp" min="0" max="2" step="0.1" value="0.2">
+                                            <input type="number" id="val-ripple-amp" class="val-input" value="0.2">
+                                        </div>
+                                    </div>
+                                        <div class="control">
+                                        <label>Frequency</label>
+                                        <div class="range-row">
+                                            <input type="range" id="ripple-freq" min="1" max="20" step="0.5" value="5">
+                                            <input type="number" id="val-ripple-freq" class="val-input" value="5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Spherify -->
+                            <div class="control-group" data-type="spherify">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-spherify">
+                                    <label for="use-spherify">Spherify</label>
+                                </div>
+                                <div class="sub-controls" id="spherify-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Strength</label>
+                                        <div class="range-row">
+                                            <input type="range" id="spherify-str" min="0" max="1" step="0.05" value="0.5">
+                                            <input type="number" id="val-spherify-str" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Skew -->
+                            <div class="control-group" data-type="skew">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-skew">
+                                    <label for="use-skew">Skew</label>
+                                </div>
+                                <div class="sub-controls" id="skew-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis (Shear)</label>
+                                        <select id="skew-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Amount</label>
+                                        <div class="range-row">
+                                            <input type="range" id="skew-amt" min="-2" max="2" step="0.1" value="0.5">
+                                            <input type="number" id="val-skew-amt" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Clipping Plane -->
+                        <div class="control-group">
+                            <div class="control-header">
+                                <input type="checkbox" id="use-clip">
+                                <label for="use-clip">Slice / Clip</label>
+                            </div>
+                            <div class="sub-controls" id="clip-controls" style="display:none;">
+                                <div class="control">
+                                    <label>Axis (Normal)</label>
+                                    <select id="clip-axis">
+                                        <option value="x">X</option>
+                                        <option value="y">Y</option>
+                                        <option value="z">Z</option>
+                                    </select>
+                                </div>
+                                <div class="control">
+                                    <label>Position</label>
+                                    <div class="range-row">
+                                        <input type="range" id="clip-pos" min="-5" max="5" step="0.1" value="0">
+                                        <input type="number" id="val-clip-pos" class="val-input" value="0">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> 
+                </div> <!-- End Deformation Section -->
+
+                <!-- Z-DEPTH EFFECT -->
+                <div class="section collapsed" id="z-depth-section" style="margin-top: 20px;">
+                    <h3 id="z-depth-header" class="collapsible-header">
+                        <span><span class="arrow-icon">▼</span> Z-DEPTH EFFECT</span>
+                    </h3>
+                    
+                    <div id="z-depth-content" style="display:none;">
+                        <!-- Color Gradient -->
+                        <div class="control-group" data-type="z-color">
+                            <div class="control-header">
+                                <input type="checkbox" id="use-z-color">
+                                <label for="use-z-color">Color Gradient</label>
+                            </div>
+                            <div class="sub-controls" id="z-color-controls" style="display:none;">
+                                <div id="gradient-colors" style="padding: 12px; background: #2a2a2a; border-radius: 6px;">
+                                    <label style="margin-bottom:8px; display:block;">Gradient Map (Start &rarr; End)</label>
+                                    <div class="gradient-editor" id="grad-editor">
+                                        <div class="gradient-bar" id="grad-bar"></div>
+                                        <div class="gradient-stops" id="grad-stops-area">
+                                            <div class="grad-stop" id="stop-1" style="left: 0%;">
+                                                <input type="color" id="input-col-near" value="#0000ff">
+                                            </div>
+                                            <div class="grad-stop" id="stop-2" style="left: 100%;">
+                                                <input type="color" id="input-col-far" value="#ff0000">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Gradient Direction Controls -->
+                                    <div style="margin-top:15px; border-top:1px solid #444; padding-top:10px;">
+                                        <label style="font-size:11px; color:#aaa; margin-bottom:8px;">Gradient Direction</label>
+                                        
+                                        <div class="control" style="margin-bottom:8px;">
+                                            <select id="grad-mode" style="font-size:11px; padding:4px;">
+                                                <option value="camera">Camera Distance (Depth)</option>
+                                                <option value="directional">3D Direction (World)</option>
+                                            </select>
+                                        </div>
+
+                                        <div id="grad-rot-controls" style="display:none;">
+                                            <div class="control">
+                                                <label style="font-size:10px;">Rotation X</label>
+                                                <div class="range-row">
+                                                    <input type="range" id="grad-rot-x" min="0" max="360" step="1" value="0">
+                                                    <input type="number" id="val-grad-rot-x" class="val-input" value="0">
+                                                </div>
+                                            </div>
+                                            <div class="control">
+                                                <label style="font-size:10px;">Rotation Y</label>
+                                                <div class="range-row">
+                                                    <input type="range" id="grad-rot-y" min="0" max="360" step="1" value="0">
+                                                    <input type="number" id="val-grad-rot-y" class="val-input" value="0">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Opacity Fade -->
+                        <div class="control-group" data-type="z-opacity">
+                            <div class="control-header">
+                                <input type="checkbox" id="use-z-opacity">
+                                <label for="use-z-opacity">Opacity Fade</label>
+                            </div>
+                            <div class="sub-controls" id="z-opacity-controls" style="display:none;">
+                                <div id="opacity-range" style="padding: 12px; background: #2a2a2a; border-radius: 6px;">
+                                    <label style="margin-bottom:8px; display:block;">Opacity Map (Near &rarr; Far)</label>
+                                    <div class="gradient-editor" id="op-grad-editor">
+                                        <div class="gradient-bar" id="op-grad-bar" style="background: linear-gradient(90deg, #000, #fff);"></div>
+                                        <div class="gradient-stops" id="op-grad-stops-area">
+                                            <div class="grad-stop" id="op-stop-1" style="left: 0%; background:#888;"></div>
+                                            <div class="grad-stop" id="op-stop-2" style="left: 100%; background:#888;"></div>
+                                        </div>
+                                    </div>
+                                    <div style="display:flex; justify-content:space-between; margin-top:5px; font-size:10px; color:#888;">
+                                        <span>Transparent</span>
+                                        <span>Opaque</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Depth of Field -->
+                        <div class="control-group" data-type="z-dof">
+                            <div class="control-header">
+                                <input type="checkbox" id="use-z-dof">
+                                <label for="use-z-dof">Depth of Field (best for Dots)</label>
+                            </div>
+                            <div class="sub-controls" id="z-dof-controls" style="display:none;">
+                                <div id="dof-settings" style="padding: 10px; background: #222; border-radius: 6px;">
+                                    <div class="control">
+                                        <label>Focus Distance</label>
+                                        <div class="range-row">
+                                            <input type="range" id="dof-focus" min="0" max="1" step="0.01" value="0.5">
+                                            <input type="number" id="val-dof-focus" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Blur Strength</label>
+                                        <div class="range-row">
+                                            <input type="range" id="dof-intensity" min="0.1" max="20" step="0.1" value="5.0">
+                                            <input type="number" id="val-dof-intensity" class="val-input" value="5.0">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Max Bokeh Size</label>
+                                        <div class="range-row">
+                                            <input type="range" id="dof-aperture" min="0" max="10" step="0.1" value="3.0">
+                                            <input type="number" id="val-dof-aperture" class="val-input" value="3.0">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="control">
+                                        <button id="btn-curve-editor" class="btn-primary" style="background:#444; border:1px solid #666; margin-top:5px;">
+                                            Open Curve Editor...
+                                        </button>
+                                    </div>
+
+                                    <div class="control">
+                                            <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                                            <input type="checkbox" id="dof-ignore-near">
+                                            Ignore Near
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="sidebar-footer">Yefym Turkin <span class="badge">v0.108</span></div>
+        </aside>
+
+        <!-- Main Viewport -->
+        <main id="viewport">
+            <!-- PRESET BUTTONS OVERLAY -->
+            <div class="preset-overlay">
+                <div class="preset-container">
+                    <button class="preset-btn" data-slot="0" title="Click to Save/Load (Shift+Click to Overwrite) | DblClick to Clear">
+                        <div class="preset-icon"></div>
+                    </button>
+                    <button class="preset-btn" data-slot="1" title="Click to Save/Load (Shift+Click to Overwrite) | DblClick to Clear">
+                        <div class="preset-icon"></div>
+                    </button>
+                    <button class="preset-btn" data-slot="2" title="Click to Save/Load (Shift+Click to Overwrite) | DblClick to Clear">
+                        <div class="preset-icon"></div>
+                    </button>
+                    <button class="preset-btn" data-slot="3" title="Click to Save/Load (Shift+Click to Overwrite) | DblClick to Clear">
+                        <div class="preset-icon"></div>
+                    </button>
+                    <button class="preset-btn" data-slot="4" title="Click to Save/Load (Shift+Click to Overwrite) | DblClick to Clear">
+                        <div class="preset-icon"></div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="canvas-container"></div>
+            <div id="svg-container" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;"></div>
+            <div class="viewport-overlay">
+                <div class="stats">
+                    <span id="poly-count">0 tris</span>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Sidebar: Render & Export -->
+        <aside class="sidebar right">
+            <div class="panel-scroll">
+            <!-- Camera (Collapsible) -->
+            <div class="section collapsed">
+                <h3 id="camera-header" class="collapsible-header collapsed">
+                    <span><span class="arrow-icon">▼</span> CAMERA</span>
+                    <button id="btn-reset-cam" class="btn-icon" title="Reset Camera">↺</button>
+                </h3>
+                <div id="camera-content" style="display:none;">
+                    
+                    <!-- New Preset Views -->
+                    <div class="control" style="margin-bottom:15px;">
+                        <label>Align View</label>
+                        <div class="camera-presets-grid">
+                            <button class="btn-view-preset" data-view="front" title="Front View">Front</button>
+                            <button class="btn-view-preset" data-view="back" title="Back View">Back</button>
+                            <button class="btn-view-preset" data-view="left" title="Left View">Left</button>
+                            <button class="btn-view-preset" data-view="right" title="Right View">Right</button>
+                            <button class="btn-view-preset" data-view="top" title="Top View">Top</button>
+                            <button class="btn-view-preset" data-view="bottom" title="Bottom View">Btm</button>
+                            <button class="btn-view-preset" data-view="iso" title="Isometric View" style="grid-column: span 2;">ISO</button>
+                        </div>
+                    </div>
+
+                    <div class="control">
+                        <label>Position</label>
+                        <div class="coord-row">
+                            <div class="coord-item">
+                                <label>X</label>
+                                <input type="number" id="cam-x" step="0.1" value="4">
+                            </div>
+                            <div class="coord-item">
+                                <label>Y</label>
+                                <input type="number" id="cam-y" step="0.1" value="3">
+                            </div>
+                            <div class="coord-item">
+                                <label>Z</label>
+                                <input type="number" id="cam-z" step="0.1" value="5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NEW: Camera Target (LookAt) Controls -->
+                    <div class="control">
+                        <label>Target (LookAt)</label>
+                        <div class="coord-row">
+                            <div class="coord-item">
+                                <label>X</label>
+                                <input type="number" id="cam-target-x" step="0.1" value="0">
+                            </div>
+                            <div class="coord-item">
+                                <label>Y</label>
+                                <input type="number" id="cam-target-y" step="0.1" value="0">
+                            </div>
+                            <div class="coord-item">
+                                <label>Z</label>
+                                <input type="number" id="cam-target-z" step="0.1" value="0">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="control">
+                        <label>Rotation (Deg)</label>
+                        <div class="coord-row">
+                            <div class="coord-item">
+                                <label>X</label>
+                                <input type="number" id="cam-rot-x" step="1" value="0">
+                            </div>
+                            <div class="coord-item">
+                                <label>Y</label>
+                                <input type="number" id="cam-rot-y" step="1" value="0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control">
+                        <label>FOV</label>
+                        <div class="range-row">
+                            <input type="range" id="cam-fov" min="1" max="150" value="45">
+                            <input type="number" id="val-cam-fov" class="val-input" value="45">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Unified Style & Export -->
+            <div class="section highlight">
+                <h3>STYLE & EXPORT</h3>
+                <div class="info-box" id="info-export-match">
+                    Export matches the preview exactly.
+                </div>
+
+                <button id="btn-preview-svg" class="btn-primary" style="margin-bottom:15px; background:#444;">
+                    PREVIEW SVG
+                </button>
+
+                <div class="control">
+                    <label>Visual Style</label>
+                    <select id="visual-style">
+                        <option value="wireframe">Wireframe (X-Ray)</option>
+                        <option value="hidden-line" selected>Hidden Line (Solid)</option>
+                        <option value="dots">Dots (X-Ray)</option>
+                        <option value="dots-solid">Dots (Solid)</option>
+                    </select>
+                </div>
+
+                <!-- Hidden Line Tweaks -->
+                <div id="hidden-line-settings" style="display:block; margin-bottom:15px; padding:10px; background:#222; border-radius:4px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <label style="color:#aaa; font-size:11px; margin:0;">Settings</label>
+                        <button id="btn-reset-hl" class="btn-icon" style="font-size:12px;" title="Reset Settings">↺</button>
+                    </div>
+                    
+                    <div class="control" id="ctrl-hl-epsilon">
+                        <label>Tolerance (Epsilon)</label>
+                        <div class="range-row">
+                            <input type="range" id="hl-epsilon" min="0" max="0.1" step="0.001" value="0.01">
+                            <input type="number" id="val-hl-epsilon" class="val-input" value="0.01">
+                        </div>
+                    </div>
+
+                    <div class="control" id="ctrl-hl-bias">
+                        <label>Depth Bias</label>
+                        <div class="range-row">
+                            <input type="range" id="hl-bias" min="0" max="3" step="0.1" value="1.0">
+                            <input type="number" id="val-hl-bias" class="val-input" value="1.0">
+                        </div> 
+                    </div>
+                    
+                    <div class="control">
+                        <label>Occluder Inflation</label>
+                        <div class="range-row">
+                            <input type="range" id="hl-inflate" min="0" max="0.2" step="0.001" value="0">
+                            <input type="number" id="val-hl-inflate" class="val-input" value="0">
+                        </div>
+                    </div>
+
+                    <div class="control">
+                        <label>Min Line Length (px)</label>
+                        <div class="range-row">
+                            <input type="range" id="hl-min-len" min="0" max="5" step="0.5" value="0.5">
+                            <input type="number" id="val-hl-min-len" class="val-input" value="0.5">
+                        </div>
+                    </div>
+
+                    <div class="control" id="ctrl-hl-spline-res">
+                        <label>Spline Subdiv</label>
+                        <div class="range-row">
+                            <input type="range" id="hl-spline-res" min="1" max="16" step="1">
+                            <input type="number" id="val-hl-spline-res" class="val-input" value="16">
+                        </div>
+                    </div>
+                    
+                    <div class="control" id="ctrl-solid-subdiv" style="display:none;">
+                        <label>Occluder Subdiv</label>
+                        <div class="range-row">
+                            <input type="range" id="solid-subdiv" min="1" max="4" step="0.5" value="1">
+                            <input type="number" id="val-solid-subdiv" class="val-input" value="2">
+                        </div>
+                    </div>
+
+                    <div class="control" id="ctrl-hl-method">
+                        <label>Occlusion Method</label>
+                        <select id="hl-method">
+                            <option value="gpu">Fastest (GPU)</option>
+                            <option value="precise">Precise (CPU)</option>
+                            <option value="precise-fast">Precise (CPU Simplified)</option>
+                            <option value="simple">Simple (CPU Legacy)</option>
+                        </select>
+                    </div>
+
+                    <div class="control" id="ctrl-gpu-grid">
+                        <label>GPU Grid Size</label>
+                        <select id="gpu-grid">
+                            <option value="1" selected>1x1</option>
+                            <option value="2">2x2</option>
+                            <option value="3">3x3</option>
+                            <option value="4">4x4</option>
+                            <option value="5">5x5</option>
+                            <option value="7">7x7</option>
+                            <option value="10">10x10</option>
+                        </select>
+                    </div>
+
+
+
+                    <div class="control" id="ctrl-hl-proper-order">
+                         <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                            <input type="checkbox" id="hl-proper-order">
+                            Proper Order (Z)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control">
+                    <label>Size (px)</label>
+                    <div class="range-row">
+                        <input type="range" id="style-dot-size" min="1" max="20" step="0.5" value="6">
+                        <input type="number" id="val-style-dot-size" class="val-input" value="6">
+                    </div>
+                </div>
+
+                <button id="btn-export" class="btn-primary">
+                    DOWNLOAD SVG
+                </button>
+            </div>
+            </div>
+         </aside>
+ 
+     <!-- Curve Editor Modal -->
+
+    <div id="curve-modal" class="loader-overlay" style="display:none; background:rgba(0,0,0,0.8);">
+        <div style="background:#1e1e1e; padding:20px; border-radius:8px; width:400px; max-width:90%; border:1px solid #444; box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0; color:#fff; font-size:14px;">Curve Editor</h3>
+                <button id="curve-close" class="btn-icon" style="font-size:16px;">&times;</button>
+            </div>
+            
+            <div style="display:flex; gap:15px; margin-bottom:10px; font-size:11px;">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="curve-link"> Link Opacity & Size
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="checkbox" id="curve-smooth"> Smooth Curve
+                </label>
+            </div>
+            
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <button id="curve-tab-op" class="btn-primary" style="margin:0; flex:1; background:#007aff;">Opacity</button>
+                <button id="curve-tab-size" class="btn-primary" style="margin:0; flex:1; background:#333;">Size</button>
+            </div>
+
+            <div style="position:relative; width:100%; height:250px; background:#111; border:1px solid #333; margin-bottom:10px; cursor:crosshair;">
+                <canvas id="curve-canvas" width="400" height="250" style="width:100%; height:100%; display:block;"></canvas>
+                <div style="position:absolute; bottom:5px; left:5px; font-size:10px; color:#555;">In Focus</div>
+                <div style="position:absolute; bottom:5px; right:5px; font-size:10px; color:#555;">Max Blur</div>
+                <div style="position:absolute; top:5px; left:5px; font-size:10px; color:#555;">Max Val</div>
+            </div>
+            
+            <div style="font-size:11px; color:#888; margin-bottom:15px; text-align:center;">
+                Double-click to add/remove points. Drag to move.
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button id="curve-reset" class="btn-primary" style="margin:0; width:auto; background:#444;">Reset Linear</button>
+                <button id="curve-apply" class="btn-primary" style="margin:0; width:auto;">Apply & Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
