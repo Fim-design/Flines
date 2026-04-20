@@ -1587,9 +1587,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- GPU DEPTH CAPTURE ---
         let gpuDepthData = null;
-        const depthResW = Math.floor(width * 2.0), depthResH = Math.floor(height * 2.0);
+        // Higher resolution for export stability
+        const depthResW = Math.max(2560, Math.floor(width * 4.0)), depthResH = Math.max(2560, Math.floor(height * 4.0));
         if (state.occlusionMethod === 'gpu' && isHiddenLine && meshSolid) {
-            pushProgress(5, 'GPU: Capturing Depth Map...');
+            pushProgress(5, 'GPU: Capturing Depth Map (High Res)...');
             const depthTarget = new THREE.WebGLRenderTarget(depthResW, depthResH);
             const depthMaterial = new THREE.ShaderMaterial({
                 side: THREE.DoubleSide,
@@ -1628,25 +1629,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tx = (_vProj.x * 0.5 + 0.5), ty = (_vProj.y * 0.5 + 0.5);
                 if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return false;
                 
-                const ix = Math.floor(tx * (depthResW - 1)), iy = Math.floor(ty * (depthResH - 1));
+                const fx = tx * (depthResW - 1);
+                const fy = ty * (depthResH - 1);
+                const ix = Math.floor(fx);
+                const iy = Math.floor(fy);
                 
-                // Neighborhood Min-Filter for precision
-                let minDepthNormalized = 1.0;
-                const gridSize = state.gpuGridSize || 3;
-                const halfSize = Math.floor(gridSize / 2);
-                for (let dy = -halfSize; dy < -halfSize + gridSize; dy++) {
-                    for (let dx = -halfSize; dx < -halfSize + gridSize; dx++) {
-                        const nx = ix + dx, ny = iy + dy;
-                        if (nx >= 0 && nx < depthResW && ny >= 0 && ny < depthResH) {
+                let storedDepth;
+                const gridSize = state.gpuGridSize || 1;
+                
+                if (gridSize <= 1) {
+                    // Smooth Bilinear Interpolation
+                    const wx = fx - ix;
+                    const wy = fy - iy;
+                    const nx = Math.min(depthResW - 1, ix + 1);
+                    const ny = Math.min(depthResH - 1, iy + 1);
+                    
+                    const d00 = gpuDepthData[iy * depthResW + ix];
+                    const d10 = gpuDepthData[iy * depthResW + nx];
+                    const d01 = gpuDepthData[ny * depthResW + ix];
+                    const d11 = gpuDepthData[ny * depthResW + nx];
+                    
+                    storedDepth = (d00 * (1 - wx) * (1 - wy) +
+                                   d10 * wx * (1 - wy) +
+                                   d01 * (1 - wx) * wy +
+                                   d11 * wx * wy) * camera.far;
+                } else {
+                    // Aggressive Neighborhood Min-Filter
+                    let minD = 1.0;
+                    const radius = Math.floor(gridSize / 2);
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            const nx = Math.max(0, Math.min(depthResW - 1, ix + dx));
+                            const ny = Math.max(0, Math.min(depthResH - 1, iy + dy));
                             const d = gpuDepthData[ny * depthResW + nx];
-                            if (d < minDepthNormalized) minDepthNormalized = d;
+                            if (d < minD) minD = d;
                         }
                     }
+                    storedDepth = minD * camera.far;
                 }
                 
-                const storedDepth = minDepthNormalized * camera.far;
                 const currentDepth = -_c1.z;
-                const bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon;
+                // Add a small constant stability epsilon to the bias
+                const bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.0005;
                 return currentDepth > storedDepth + bias;
             }
 
@@ -1748,7 +1772,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return { x: (_vProj.x * halfW) + halfW, y: -(_vProj.y * halfH) + halfH, w: _vProj.w }; 
         }
 
-        function getBezierCommand(p0, p1, p2, p3, tension = 0.15) { const t1x = (p2.x - p0.x) * tension, t1y = (p2.y - p0.y) * tension, t2x = (p3.x - p1.x) * tension, t2y = (p3.y - p1.y) * tension; return `C ${(p1.x + t1x).toFixed(1)},${(p1.y + t1y).toFixed(1)} ${(p2.x - t2x).toFixed(1)},${(p2.y - t2y).toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`; }
+        function getBezierCommand(p0, p1, p2, p3, tension = 0.15) { 
+            const t1x = (p2.x - p0.x) * tension, t1y = (p2.y - p0.y) * tension, 
+                  t2x = (p3.x - p1.x) * tension, t2y = (p3.y - p1.y) * tension; 
+            return `C ${(p1.x + t1x).toFixed(3)},${(p1.y + t1y).toFixed(3)} ${(p2.x - t2x).toFixed(3)},${(p2.y - t2y).toFixed(3)} ${p2.x.toFixed(3)},${p2.y.toFixed(3)}`; 
+        }
 
         // --- SEGMENT BUFFERING ---
         const rawSegments = [];
@@ -1767,12 +1795,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const style = getStyle(dist, worldMid);
             if (style.op <= 0.001) return;
 
-            rawSegments.push({ p1: pA, p2: pB, z: dist, style: style, isSpline: isSpline });
-            if (state.properOrder) allSegments.push({ p1: pA, p2: pB, z: dist, style: style, isSpline: isSpline });
+            rawSegments.push({ p1: {x: pA.x, y: pA.y}, p2: {x: pB.x, y: pB.y}, z: dist, style: style, isSpline: isSpline });
+            if (state.properOrder) allSegments.push({ p1: {x: pA.x, y: pA.y}, p2: {x: pB.x, y: pB.y}, z: dist, style: style, isSpline: isSpline });
         };
 
         // --- RECURSIVE SUBDIVISION ---
-        function traceSegmentRecursive(pStart, pEnd, depth) {
+        function traceSegmentRecursive(pStart, pEnd, depth, isSpline = false) {
             const wStart = pStart.clone().applyMatrix4(matWorld);
             const wEnd = pEnd.clone().applyMatrix4(matWorld);
             const dStart = camPos.distanceTo(wStart);
@@ -1793,7 +1821,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          c1.z < -near && c2.z < -near) {
                          
                          const wMid = wStart.clone().lerp(wEnd, 0.5);
-                         collectLine(scr1, scr2, (dStart+dEnd)/2, wMid);
+                         collectLine(scr1, scr2, (dStart+dEnd)/2, wMid, isSpline);
                      }
                 } else if (depth < 2) {
                      // Both hidden, but might be tunneling? Check mid
@@ -1802,33 +1830,33 @@ document.addEventListener('DOMContentLoaded', () => {
                      const dMid = camPos.distanceTo(wMid);
                      const visMid = !checkOcclusion(wMid, dMid);
                      if (visMid) {
-                         traceSegmentRecursive(pStart, mid, depth + 1);
-                         traceSegmentRecursive(mid, pEnd, depth + 1);
+                         traceSegmentRecursive(pStart, mid, depth + 1, isSpline);
+                         traceSegmentRecursive(mid, pEnd, depth + 1, isSpline);
                      }
                 }
                 return;
             }
             
-            if (depth > 4) { 
+            if (depth > 6) { 
                 if (visStart) {
                     const mid = pStart.clone().lerp(pEnd, 0.5);
                     const wMid = mid.clone().applyMatrix4(matWorld);
                     const c1 = wStart.clone().applyMatrix4(matView);
                     const c2 = wMid.clone().applyMatrix4(matView); 
-                    collectLine(project(c1), project(c2), dStart, wMid);
+                    collectLine(project(c1), project(c2), dStart, wMid, isSpline);
                 } else if (visEnd) {
                     const mid = pStart.clone().lerp(pEnd, 0.5);
                     const wMid = mid.clone().applyMatrix4(matWorld);
                     const c1 = wMid.clone().applyMatrix4(matView);
                     const c2 = wEnd.clone().applyMatrix4(matView);
-                    collectLine(project(c1), project(c2), dEnd, wMid);
+                    collectLine(project(c1), project(c2), dEnd, wMid, isSpline);
                 }
                 return;
             }
             
             const mid = pStart.clone().lerp(pEnd, 0.5);
-            traceSegmentRecursive(pStart, mid, depth + 1);
-            traceSegmentRecursive(mid, pEnd, depth + 1);
+            traceSegmentRecursive(pStart, mid, depth + 1, isSpline);
+            traceSegmentRecursive(mid, pEnd, depth + 1, isSpline);
         }
 
         let output = '';
@@ -1994,29 +2022,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                  }
                              }
                          } else {
-                             // --- STANDARD DENSE PATH ---
+                             // --- STANDARD DENSE PATH (NOW SMOOTH RECURSIVE) ---
                              for(let j=0; j < densePoints.length - 1; j++) {
-                                 const p1 = densePoints[j], p2 = densePoints[j+1];
-                                 const w1 = p1.clone().applyMatrix4(matWorld);
-                                 const w2 = p2.clone().applyMatrix4(matWorld);
-
-                                 if (clipPlane && (clipPlane.distanceToPoint(w1) > 0 || clipPlane.distanceToPoint(w2) > 0)) continue;
-
-                                 const c1 = w1.clone().applyMatrix4(matView), c2 = w2.clone().applyMatrix4(matView);
-                                 if (c1.z > -near && c2.z > -near) continue;
-
-                                 const scr1 = project(c1), scr2 = project(c2);
-                                 if (Math.max(scr1.x, scr2.x) < 0 || Math.min(scr1.x, scr2.x) > width ||
-                                     Math.max(scr1.y, scr2.y) < 0 || Math.min(scr1.y, scr2.y) > height) continue;
-
-                                 const wMid = _mid.copy(w1).lerp(w2, 0.5);
-                                 const dist = camPos.distanceTo(wMid);
-                                 let isVisible = true;
-                                 if (isHiddenLine) isVisible = !checkOcclusion(wMid, dist);
-
-                                 if (isVisible) {
-                                     collectLine(scr1, scr2, dist, wMid, true);
-                                 }
+                                 traceSegmentRecursive(densePoints[j], densePoints[j+1], 0, true);
                              }
                          }
 
@@ -2097,43 +2105,12 @@ document.addEventListener('DOMContentLoaded', () => {
              tickProgress(0, 'Processing Lines...');
                for (let i = 0; i < total; i++) {
                   await smartYield();
-
-                 
-                 const idx = i * 2; 
-
-                 _p1.fromBufferAttribute(pos, idx);
-                 _p2.fromBufferAttribute(pos, idx+1);
-
-
-                 const w1 = _p1.clone().applyMatrix4(matWorld);
-                  const w2 = _p2.clone().applyMatrix4(matWorld);
-                  if (clipPlane && (clipPlane.distanceToPoint(w1) > 0 || clipPlane.distanceToPoint(w2) > 0)) { markLineRendered('Processing lines...'); continue; }
-
-                  // Early viewport culling - transform to camera space and check bounds BEFORE expensive occlusion check
-                  const c1 = w1.clone().applyMatrix4(matView);
-                  const c2 = w2.clone().applyMatrix4(matView);
+                  const idx = i * 2; 
+                  _p1.fromBufferAttribute(pos, idx);
+                  _p2.fromBufferAttribute(pos, idx+1);
                   
-                  // Skip if both points are behind camera
-                  if (c1.z > -near && c2.z > -near) { markLineRendered('Processing lines...'); continue; }
-                  
-                  // Skip if both points are clearly outside viewport bounds
-                  const scr1 = project(c1);
-                  const scr2 = project(c2);
-                  if (Math.max(scr1.x, scr2.x) < 0 || Math.min(scr1.x, scr2.x) > width ||
-                      Math.max(scr1.y, scr2.y) < 0 || Math.min(scr1.y, scr2.y) > height) { markLineRendered('Processing lines...'); continue; }
-
-                  // Midpoint Check
-                  const wMid = w1.clone().lerp(w2, 0.5);
-                  const dist = camPos.distanceTo(wMid);
-
-                 let isVisible = true;
-                 if (isHiddenLine) isVisible = !checkOcclusion(wMid, dist);
-
-                     if (isVisible) {
-                          collectLine(scr1, scr2, dist, wMid);
-                     }
-                    markLineRendered('Processing lines...');
-
+                  traceSegmentRecursive(_p1, _p2, 0, false);
+                  markLineRendered('Processing lines...');
              }
         }
 
@@ -2146,7 +2123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let finalSVG = '';
-            const precision = 1;
+            const precision = 3;
 
             if (state.properOrder) {
                 for (const seg of segments) {
@@ -2155,7 +2132,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const width = (state.strokeWidth * seg.style.scale).toFixed(2);
                     const isSpline = seg.isSpline;
 
-                    let pathD = `M ${seg.p1.x.toFixed(1)},${seg.p1.y.toFixed(1)} L ${seg.p2.x.toFixed(1)},${seg.p2.y.toFixed(1)}`;
+                    let pathD = `M ${seg.p1.x.toFixed(3)},${seg.p1.y.toFixed(3)} L ${seg.p2.x.toFixed(3)},${seg.p2.y.toFixed(3)}`;
                     const pathStr = `<path d="${pathD}" fill="none" stroke="${col}" stroke-width="${width}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
                     finalSVG += pathStr;
                     reportLineSegment(pathStr);
@@ -2211,14 +2188,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     
-                    let pathD = `M ${pathPoints[0].x.toFixed(1)},${pathPoints[0].y.toFixed(1)}`;
-                    if (isSpline && pathPoints.length > 2) {
+                    let pathD = `M ${pathPoints[0].x.toFixed(3)},${pathPoints[0].y.toFixed(3)}`;
+                    // Use Beziers only for long-segment splines to avoid "doubly-interpolated" wobbles on dense paths
+                    const useBeziers = isSpline && pathPoints.length > 2 && (pathPoints.length < 50); 
+                    
+                    if (useBeziers) {
                         for (let k = 0; k < pathPoints.length - 1; k++) {
                             pathD += ' ' + getBezierCommand(pathPoints[Math.max(0, k - 1)], pathPoints[k], pathPoints[k + 1], pathPoints[Math.min(pathPoints.length - 1, k + 2)]);
                         }
                     } else {
                         for (let k = 1; k < pathPoints.length; k++) {
-                            pathD += ` L ${pathPoints[k].x.toFixed(1)},${pathPoints[k].y.toFixed(1)}`;
+                            pathD += ` L ${pathPoints[k].x.toFixed(3)},${pathPoints[k].y.toFixed(3)}`;
                         }
                     }
                     const pathStr = `<path d="${pathD}" fill="none" stroke="${col}" stroke-width="${width}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
