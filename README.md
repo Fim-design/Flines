@@ -4,4 +4,4 @@
 #How to run:
 Download files, open index.html in browser
 
-Or use [Online Demo](https://www.example.com](https://fim-design.github.io/Flines)
+Or use [Online Demo](https://www.example.com](https://fim-design.github.io/Flines))
