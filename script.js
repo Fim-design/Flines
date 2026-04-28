@@ -1670,7 +1670,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const currentDepth = -_c1.z;
                 // Add a small constant stability epsilon to the bias
-                // const bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.0005;
+                const bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.0005;
                 return currentDepth > storedDepth + bias;
             }
 
