@@ -248,7 +248,12 @@ document.addEventListener('DOMContentLoaded', () => {
         ripple:{ enabled: false, amp: 0.2, freq: 5.0, axis: 'y' },
         spherify: { enabled: false, str: 0.5 },
         skew: { enabled: false, amt: 0.5, axis: 'y' },
-        deformationOrder: ['noise', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew'],
+        pinch: { enabled: false, str: 0.5, axis: 'all' },
+        stretch: { enabled: false, amt: 0.5, axis: 'y' },
+        swirl: { enabled: false, str: 0.5, axis: 'y' },
+        quantize: { enabled: false, steps: 10, axis: 'all' },
+        zigzag: { enabled: false, amp: 0.2, freq: 5.0, axis: 'y' },
+        deformationOrder: ['noise', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew', 'pinch', 'stretch', 'swirl', 'quantize', 'zigzag'],
         reorderMode: false,
         cam: { x: 4, y: 3, z: 5, rotX: 0, rotY: 0, fov: 45, target: {x: 0, y: 0, z: 0} },
         autoRotate: false,
@@ -331,7 +336,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 gradMode: { value: 0 }, 
                 gradDir: { value: new THREE.Vector3(0,0,1) }
             },
+            clipping: true,
             vertexShader: `
+                #include <clipping_planes_pars_vertex>
                 uniform float pointSize; 
                 uniform vec3 cameraPos; 
                 uniform int gradMode;
@@ -348,10 +355,12 @@ document.addEventListener('DOMContentLoaded', () => {
                          vProj = vDist; 
                     }
                     vec4 mvPosition = viewMatrix * worldPosition; 
+                    #include <clipping_planes_vertex>
                     gl_Position = projectionMatrix * mvPosition; 
                     gl_PointSize = pointSize * (5.0 / -mvPosition.z); 
                 }`,
             fragmentShader: `
+                #include <clipping_planes_pars_fragment>
                 uniform vec3 color; 
                 uniform vec3 colorNear; 
                 uniform vec3 colorFar; 
@@ -372,6 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 varying float vDist; 
                 varying float vProj;
                 void main() { 
+                    #include <clipping_planes_fragment>
                     float metric = (gradMode == 1) ? vProj : vDist;
                     float range = maxZ - minZ; 
                     if (range < 0.001) range = 1.0; 
@@ -430,6 +440,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 state[key] = newState[key];
             }
         });
+        if (state.deformationOrder) {
+            const allDeformations = ['noise', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew', 'pinch', 'stretch', 'swirl', 'quantize', 'zigzag'];
+            const missing = allDeformations.filter(d => !state.deformationOrder.includes(d));
+            state.deformationOrder.push(...missing);
+        }
         if (state.opGradStart === undefined) state.opGradStart = 0.0;
         if (state.opGradEnd === undefined) state.opGradEnd = 1.0;
         if (state.occlusionMethod === undefined) {
@@ -529,6 +544,204 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    function setupChangelog() {
+        const badge = document.getElementById('version-badge');
+        const modal = document.getElementById('changelog-modal');
+        const content = document.getElementById('changelog-content');
+        const closeBtn = document.getElementById('changelog-close');
+
+        if (!badge || !modal || !content || !closeBtn) return;
+
+        const changelogText = `█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█   VERSION 0.108   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+├── [NEW] GPU hidden line processing (way faster now)
+│ 
+└── [UI] Added Occlusion Method selector
+
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█   VERSION 0.107   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+├── [FIX] Z effects now works together better
+│   └── Gradient color positions dont affect DoF anymore
+│ 
+└── [NEW] Noise Axis (Displacement) type ==> from center
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█   VERSION 0.106   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+├── [NEW] Settings recall system
+│   └── Added UI elements to: export/load from file
+│
+├── [NEW] Min Line Length Filtering
+│   └── Filter out line segments shorter than threshold
+│
+├── [NEW] Occluder Inflation
+│   └── Inflates solid occluder geometry
+│
+├── [NEW] Sphere Circles Geometry
+│
+├── [NEW] Geo Defaults System
+│   └── Per-geometry smart defaults (epsilon, bias, inflate, splineRes)
+│
+├── [MOD] Improved Occlusion Handling
+│   └── Bias slider moved to main Hidden Line settings
+│
+└── [FIX] UI Cleanup
+    └── Removed experimental overlay silhouette toggle (too noisy)
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█   VERSION 0.103   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+├── [NEW] Preset System
+│   ├── 5 save/recall slots (◆ ◆ ◆ ◆ ◆ buttons)
+│   ├── Click to load saved state
+│   ├── Shift-Click to overwrite slot
+│   └── Double-Click to clear slot
+│
+├── [NEW] Camera Target Position
+│   ├── X, Y, Z target controls
+│   └── Independent from camera position
+│
+├── [NEW] View Presets
+│   ├── Front, Back, Left, Right views
+│   ├── Top, Bottom views
+│   └── Isometric view
+│
+├── [NEW] Directional Gradient Mode
+│   ├── Camera mode (default) - distance from camera
+│   ├── Directional mode - projection on vector
+│   ├── Gradient direction rotation (X, Y)
+│   └── Color gradient rotates with direction
+│
+
+└── [MOD] State Management
+    ├── Preset slots saved to state
+    └── Target position tracked in state
+
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█  VERSION 0.10   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+├── [NEW] Landscape Generator
+│   ├── Procedural terrain generation
+│   ├── Multiple segment settings (width, height, segs)
+│   └── Noise-based height displacement
+│
+├── [NEW] Multiple Noise Types
+│   ├── Simplex (default)
+│   ├── Perlin
+│   ├── Worley (Cellular)
+│   ├── Value Noise
+│   ├── Turbulence (abs noise)
+│   └── Ridged Multifractal
+│
+├── [NEW] Depth of Field (DOF)
+│   ├── Focus distance control
+│   ├── Blur intensity
+│   ├── Aperture size
+│   ├── Ignore near option
+│   └── Curve Editor w/ separate opacity and size curves
+│
+├── [NEW] Deformation Reordering
+│   └── Drag & drop to change deformation execution order
+│
+├── [MOD] Refactored Depth Effects
+│   └── zEffect → zDepth (color, opacity, dof as separate toggles)
+│
+├── [MOD] Simplified Export
+│   └── Removed legacy/proper order toggles (simplified export path)
+│
+├── [MOD] Expanded Geometry Parameters
+│   ├── Separate width/height/depth for cube
+│   ├── Separate radial/tubular segments for torus
+│   └── Individual segment controls for grid
+│
+└── [MOD] Enhanced Noise Controls
+    ├── Noise type selection
+    ├── Amplitude, frequency, seed
+    └── Octaves, persistence, lacunarity (landscape only)
+
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█  VERSION 0.09   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+├── [NEW] Clipping Plane System
+│   ├── X, Y, Z axis selection
+│   └── Adjustable clip position
+│
+├── [NEW] Spherify Deformation
+│   └── Pushes vertices toward sphere shape
+│
+├── [NEW] Skew Deformation
+│   └── Skews geometry along selected axis
+│
+├── [NEW] Noise Seed Control
+│   └── Reproducible noise patterns
+│
+├── [NEW] Axis Control for All Deformations
+│   └── X, Y, Z axis selection for each deformation type
+│
+├── [MOD] Export Options
+│   ├── Legacy Hidden Line toggle
+│   └── Proper Order toggle (depth-sorted SVG output)
+│
+└── [MOD] Enhanced Parameter Controls
+    └── Individual segment parameters for cube (segs X, Y, Z)
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█   VERSION 0.03    █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+├── [GEOMETRY] Basic Shapes
+│   ├── Cube, Sphere, Icosahedron, Tetrahedron
+│   ├── Octahedron, Dodecahedron
+│   ├── Cone, Cylinder, Torus, Torus Knot
+│   └── Ring, Grid/Plane
+│
+├── [SURFACES] Math & Parametric Surfaces
+│   ├── 5 Math Presets (Ripple, Waves, Saddle, Paraboloid, Pyramid)
+│   ├── 6 Parametric Presets (Klein Bottle, Torus, Mobius, Helicoid, Sphere, Dini)
+│   └── Custom OBJ Upload
+│
+├── [DEFORMATIONS] 7 Geometry Modifiers
+│   ├── Twist, Wave, Bulge, Bend, Taper, Ripple
+│   └── Simplex Noise displacement
+│
+├── [STYLES] Visual Styles
+│   ├── Hidden Line (Solid)
+│   ├── Wireframe (X-Ray)
+│   ├── Dots (X-Ray)
+│   └── Dots (Solid)
+│
+
+├── [EFFECTS] Depth-Based Effects
+│   ├── Color Gradient (Blue → Red)
+│   └── Opacity Fade
+│
+├── [EXPORT] SVG Export
+│   ├── Full resolution export
+│   └── Preview mode
+│
+└── [CAMERA] Basic Orbit Controls`;
+
+        content.textContent = changelogText;
+
+        badge.addEventListener('click', () => {
+            modal.style.display = 'flex';
+        });
+
+        closeBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    }
+
     initScene();
     setupUI();
     setupPresets();
@@ -536,6 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rebuildUIParams();
     updateUIFromState();
     updateGeometry();
+    setupChangelog();
     animate();
 
     document.addEventListener('keydown', (e) => {
@@ -577,9 +791,11 @@ document.addEventListener('DOMContentLoaded', () => {
             mathPresets.forEach((p, i) => { const opt = document.createElement('option'); opt.value = i; opt.textContent = p.name; mathSel.appendChild(opt); });
             mathSel.addEventListener('change', (e) => {
                 const p = mathPresets[e.target.value]; if(!p) return;
+                saveHistory();
                 state.mathFormula = p.formula; document.getElementById('math-formula').value = p.formula;
                 if(p.vars) { state.mathVars = { ...state.mathVars, ...p.vars }; ['a','b','c'].forEach(k => document.getElementById(`math-var-${k}`).value = state.mathVars[k]); }
                 updateGeometry();
+                e.target.value = "";
             });
         }
         const paramSel = document.getElementById('param-presets');
@@ -587,10 +803,16 @@ document.addEventListener('DOMContentLoaded', () => {
             paramPresets.forEach((p, i) => { const opt = document.createElement('option'); opt.value = i; opt.textContent = p.name; paramSel.appendChild(opt); });
             paramSel.addEventListener('change', (e) => {
                 const p = paramPresets[e.target.value]; if(!p) return;
+                saveHistory();
                 state.parametricFormulas.x = p.x; state.parametricFormulas.y = p.y; state.parametricFormulas.z = p.z;
                 document.getElementById('param-x').value = p.x; document.getElementById('param-y').value = p.y; document.getElementById('param-z').value = p.z;
-                if (state.geoType === 'parametric') { state.geoParams[0] = p.uMin; state.geoParams[1] = p.uMax; state.geoParams[2] = p.vMin; state.geoParams[3] = p.vMax; rebuildUIParams(); }
+                if (state.geoType === 'parametric') { 
+                    state.geoParams[0] = p.uMin; state.geoParams[1] = p.uMax; 
+                    state.geoParams[2] = p.vMin; state.geoParams[3] = p.vMax; 
+                    rebuildUIParams(true); 
+                }
                 updateGeometry();
+                e.target.value = "";
             });
         }
     }
@@ -734,7 +956,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('obj-input').addEventListener('change', (e) => { saveHistory(); const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = (ev) => { const loader = new THREE.OBJLoader(); const obj = loader.parse(ev.target.result); const geos = []; obj.traverse(c => { if(c.isMesh) geos.push(c.geometry); }); if(geos.length) { originalGeometry = geos.length === 1 ? geos[0] : THREE.BufferGeometryUtils.mergeBufferGeometries(geos); originalGeometry = THREE.BufferGeometryUtils.mergeVertices(originalGeometry); originalGeometry.center(); originalGeometry.computeBoundingSphere(); const s = 3.0 / originalGeometry.boundingSphere.radius; originalGeometry.scale(s,s,s); updateGeometry(); } }; reader.readAsText(file); });
 
         const bindCheck = (id, key) => { const el = document.getElementById(id); const sub = document.getElementById(key + '-controls'); el.addEventListener('change', () => { saveHistory(); state[key].enabled = el.checked; if(sub) sub.style.display = el.checked ? 'block' : 'none'; updateGeometry(); }); };
-        ['noise','twist','wave','bulge','bend','taper','ripple','spherify','skew'].forEach(k => bindCheck('use-'+k, k));
+        ['noise','twist','wave','bulge','bend','taper','ripple','spherify','skew','pinch','stretch','swirl','quantize','zigzag'].forEach(k => bindCheck('use-'+k, k));
 
         syncInput('noise-amp', 'val-noise-amp', (v) => { state.noise.amp = parseFloat(v); updateGeometry(); });
         syncInput('noise-freq', 'val-noise-freq', (v) => { state.noise.freq = parseFloat(v); updateGeometry(); });
@@ -749,6 +971,12 @@ document.addEventListener('DOMContentLoaded', () => {
         syncInput('ripple-freq', 'val-ripple-freq', (v) => { state.ripple.freq = parseFloat(v); updateGeometry(); });
         syncInput('spherify-str', 'val-spherify-str', (v) => { state.spherify.str = parseFloat(v); updateGeometry(); });
         syncInput('skew-amt', 'val-skew-amt', (v) => { state.skew.amt = parseFloat(v); updateGeometry(); });
+        syncInput('pinch-str', 'val-pinch-str', (v) => { state.pinch.str = parseFloat(v); updateGeometry(); });
+        syncInput('stretch-amt', 'val-stretch-amt', (v) => { state.stretch.amt = parseFloat(v); updateGeometry(); });
+        syncInput('swirl-str', 'val-swirl-str', (v) => { state.swirl.str = parseFloat(v); updateGeometry(); });
+        syncInput('quantize-steps', 'val-quantize-steps', (v) => { state.quantize.steps = parseInt(v); updateGeometry(); });
+        syncInput('zigzag-amp', 'val-zigzag-amp', (v) => { state.zigzag.amp = parseFloat(v); updateGeometry(); });
+        syncInput('zigzag-freq', 'val-zigzag-freq', (v) => { state.zigzag.freq = parseFloat(v); updateGeometry(); });
 
         syncInput('landscape-seed', 'val-landscape-seed', (v) => { state.landscape.seed = parseInt(v); updateGeometry(); });
         document.getElementById('landscape-noise-type').addEventListener('change', (e) => { saveHistory(); state.landscape.noiseType = e.target.value; updateGeometry(); });
@@ -762,7 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('noise-axis').addEventListener('change', (e) => { saveHistory(); state.noise.axis = e.target.value; updateGeometry(); });
         document.getElementById('noise-type').addEventListener('change', (e) => { saveHistory(); state.noise.noiseType = e.target.value; updateGeometry(); });
-        ['twist','wave','bulge','bend','taper','ripple','skew'].forEach(k => document.getElementById(k+'-axis').addEventListener('change', (e) => { saveHistory(); state[k].axis = e.target.value; updateGeometry(); }));
+        ['twist','wave','bulge','bend','taper','ripple','skew','pinch','stretch','swirl','quantize','zigzag'].forEach(k => document.getElementById(k+'-axis').addEventListener('change', (e) => { saveHistory(); state[k].axis = e.target.value; updateGeometry(); }));
 
         const updateCamPos = () => { state.cam.x = parseFloat(document.getElementById('cam-x').value); state.cam.y = parseFloat(document.getElementById('cam-y').value); state.cam.z = parseFloat(document.getElementById('cam-z').value); camera.position.set(state.cam.x, state.cam.y, state.cam.z); controls.update(); };
         ['x', 'y', 'z'].forEach(axis => { const el = document.getElementById(`cam-${axis}`); el.addEventListener('focus', recordDragStart); el.addEventListener('blur', recordDragEnd); el.addEventListener('change', updateCamPos); });
@@ -1034,6 +1262,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setCheck('use-ripple', state.ripple.enabled); setDisplay('ripple-controls', state.ripple.enabled); setVal('ripple-axis', state.ripple.axis); setVal('ripple-amp', state.ripple.amp); setVal('val-ripple-amp', state.ripple.amp); setVal('ripple-freq', state.ripple.freq); setVal('val-ripple-freq', state.ripple.freq);
         setCheck('use-spherify', state.spherify.enabled); setDisplay('spherify-controls', state.spherify.enabled); setVal('spherify-str', state.spherify.str); setVal('val-spherify-str', state.spherify.str);
         setCheck('use-skew', state.skew.enabled); setDisplay('skew-controls', state.skew.enabled); setVal('skew-axis', state.skew.axis); setVal('skew-amt', state.skew.amt); setVal('val-skew-amt', state.skew.amt);
+        setCheck('use-pinch', state.pinch.enabled); setDisplay('pinch-controls', state.pinch.enabled); setVal('pinch-axis', state.pinch.axis); setVal('pinch-str', state.pinch.str); setVal('val-pinch-str', state.pinch.str);
+        setCheck('use-stretch', state.stretch.enabled); setDisplay('stretch-controls', state.stretch.enabled); setVal('stretch-axis', state.stretch.axis); setVal('stretch-amt', state.stretch.amt); setVal('val-stretch-amt', state.stretch.amt);
+        setCheck('use-swirl', state.swirl.enabled); setDisplay('swirl-controls', state.swirl.enabled); setVal('swirl-axis', state.swirl.axis); setVal('swirl-str', state.swirl.str); setVal('val-swirl-str', state.swirl.str);
+        setCheck('use-quantize', state.quantize.enabled); setDisplay('quantize-controls', state.quantize.enabled); setVal('quantize-axis', state.quantize.axis); setVal('quantize-steps', state.quantize.steps); setVal('val-quantize-steps', state.quantize.steps);
+        setCheck('use-zigzag', state.zigzag.enabled); setDisplay('zigzag-controls', state.zigzag.enabled); setVal('zigzag-axis', state.zigzag.axis); setVal('zigzag-amp', state.zigzag.amp); setVal('val-zigzag-amp', state.zigzag.amp); setVal('zigzag-freq', state.zigzag.freq); setVal('val-zigzag-freq', state.zigzag.freq);
 
         setVal('cam-x', state.cam.x); setVal('cam-y', state.cam.y); setVal('cam-z', state.cam.z); setVal('cam-fov', state.cam.fov); setVal('val-cam-fov', state.cam.fov);
         if(state.cam.target) {
@@ -1161,8 +1394,15 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'grid': geo = new THREE.PlaneGeometry(p[0], p[1], mult(p[2]), mult(p[3])); break;
             case 'math': {
                 const range = p[0], segs = mult(p[1]);
-                const mathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const random = Math.random; const a = ${state.mathVars.a}; const b = ${state.mathVars.b}; const c = ${state.mathVars.c};`;
-                let func; try { func = new Function('x', 'z', mathContext + 'return ' + state.mathFormula + ';'); } catch(e) { return new THREE.PlaneGeometry(range*2, range*2, segs, segs); }
+                const mathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const atan2 = Math.atan2; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const sign = Math.sign; const hypot = Math.hypot; const random = Math.random; const a = ${state.mathVars.a}; const b = ${state.mathVars.b}; const c = ${state.mathVars.c};`;
+                const errEl = document.getElementById('math-error');
+                let func; try { 
+                    func = new Function('x', 'z', mathContext + 'return ' + state.mathFormula + ';'); 
+                    if(errEl) errEl.style.display = 'none';
+                } catch(e) { 
+                    if(errEl) errEl.style.display = 'block';
+                    return new THREE.PlaneGeometry(range*2, range*2, segs, segs); 
+                }
                 geo = new THREE.PlaneGeometry(range * 2, range * 2, segs, segs);
                 const pos = geo.attributes.position; for(let i=0; i<pos.count; i++){ const x = pos.getX(i), z = pos.getY(i); let y = 0; try { y = func(x, z); } catch(e) { y = 0; } pos.setXYZ(i, x, y, z); }
                 geo.computeVertexNormals();
@@ -1170,8 +1410,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             case 'parametric': {
                 const uMin = p[0], uMax = p[1], vMin = p[2], vMax = p[3], pSegs = mult(p[4]);
-                const pMathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const random = Math.random;`;
-                let funcX, funcY, funcZ; try { funcX = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.x + ';'); funcY = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.y + ';'); funcZ = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.z + ';'); } catch(e) { return new THREE.PlaneGeometry(5, 5, pSegs, pSegs); }
+                const pMathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const atan2 = Math.atan2; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const sign = Math.sign; const hypot = Math.hypot; const random = Math.random;`;
+                const errEl = document.getElementById('param-error');
+                let funcX, funcY, funcZ; try { 
+                    funcX = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.x + ';'); 
+                    funcY = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.y + ';'); 
+                    funcZ = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.z + ';'); 
+                    if(errEl) errEl.style.display = 'none';
+                } catch(e) { 
+                    if(errEl) errEl.style.display = 'block';
+                    return new THREE.PlaneGeometry(5, 5, pSegs, pSegs); 
+                }
                 geo = new THREE.PlaneGeometry(1, 1, pSegs, pSegs);
                 const posP = geo.attributes.position; for(let i=0; i<posP.count; i++){ const rawU = posP.getX(i), rawV = posP.getY(i); const normU = rawU + 0.5, normV = rawV + 0.5; const u = uMin + (normU * (uMax - uMin)), v = vMin + (normV * (vMax - vMin)); let valX=0, valY=0, valZ=0; try { valX = funcX(u, v); valY = funcY(u, v); valZ = funcZ(u, v); } catch(e) { } posP.setXYZ(i, valX, valY, valZ); }
                 geo.computeVertexNormals();
@@ -1337,7 +1586,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 taper: (v, p) => { const axisIdx = axMap[p.axis], mainVal = v.getComponent(axisIdx), scale = Math.max(0, 1 + (mainVal * p.amt)), uIdx = (axisIdx + 1) % 3, wIdx = (axisIdx + 2) % 3; v.setComponent(uIdx, v.getComponent(uIdx) * scale); v.setComponent(wIdx, v.getComponent(wIdx) * scale); },
                 ripple: (v, p) => { const axisIdx = axMap[p.axis], u = v.getComponent((axisIdx + 1) % 3), w = v.getComponent((axisIdx + 2) % 3), d = Math.sqrt(u*u + w*w), val = v.getComponent(axisIdx); v.setComponent(axisIdx, val + Math.sin(d * p.freq) * p.amp); },
                 spherify: (v, p) => { const str = p.str; if (str > 0.001) { const len = v.length(); if (len > 0.0001) { const target = v.clone().normalize().multiplyScalar(1.5); v.lerp(target, str); } } },
-                skew: (v, p) => { const amt = p.amt, axis = p.axis; if (axis === 'x') { v.y += v.x * amt; v.z += v.x * amt; } else if (axis === 'y') { v.x += v.y * amt; v.z += v.y * amt; } else { v.x += v.z * amt; v.y += v.z * amt; } }
+                skew: (v, p) => { const amt = p.amt, axis = p.axis; if (axis === 'x') { v.y += v.x * amt; v.z += v.x * amt; } else if (axis === 'y') { v.x += v.y * amt; v.z += v.y * amt; } else { v.x += v.z * amt; v.y += v.z * amt; } },
+                pinch: (v, p) => { const dist = v.length(), factor = Math.max(0.1, 1 - (Math.exp(-dist * dist * 0.1) * p.str)); if (p.axis === 'all') v.multiplyScalar(factor); else { const idx = axMap[p.axis]; v.setComponent(idx, v.getComponent(idx) * factor); } },
+                stretch: (v, p) => { const axisIdx = axMap[p.axis], amt = p.amt, scale = 1 + amt, invScale = 1 / Math.max(0.01, Math.sqrt(scale)); v.setComponent(axisIdx, v.getComponent(axisIdx) * scale); const uIdx = (axisIdx+1)%3, wIdx = (axisIdx+2)%3; v.setComponent(uIdx, v.getComponent(uIdx) * invScale); v.setComponent(wIdx, v.getComponent(wIdx) * invScale); },
+                swirl: (v, p) => { const axisIdx = axMap[p.axis], uIdx = (axisIdx+1)%3, wIdx = (axisIdx+2)%3, u = v.getComponent(uIdx), w = v.getComponent(wIdx), d = Math.sqrt(u*u + w*w), angle = d * p.str, c = Math.cos(angle), s = Math.sin(angle); v.setComponent(uIdx, u*c - w*s); v.setComponent(wIdx, u*s + w*c); },
+                quantize: (v, p) => { const steps = Math.max(1, p.steps); if (p.axis === 'all') { v.x = Math.round(v.x * steps) / steps; v.y = Math.round(v.y * steps) / steps; v.z = Math.round(v.z * steps) / steps; } else { const idx = axMap[p.axis]; v.setComponent(idx, Math.round(v.getComponent(idx) * steps) / steps); } },
+                zigzag: (v, p) => { const axisIdx = axMap[p.axis], val = v.getComponent(axisIdx), uIdx = (axisIdx+1)%3, wIdx = (axisIdx+2)%3; v.setComponent(uIdx, v.getComponent(uIdx) + Math.asin(Math.sin(val * p.freq)) * p.amp); v.setComponent(wIdx, v.getComponent(wIdx) + Math.asin(Math.sin(val * p.freq + Math.PI/2)) * p.amp); }
             };
             for (let i = 0; i < pos.count; i++) {
                 v.fromBufferAttribute(pos, i);
@@ -1364,7 +1618,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (style === 'hidden-line' || style === 'dots-solid') {
             
             let solidGeoToUse = geoSolid;
-            if (state.hiddenSettings.inflate > 0.0001) {
+            if (Math.abs(state.hiddenSettings.inflate) > 0.0001) {
                 solidGeoToUse = geoSolid.clone();
                 const pos = solidGeoToUse.attributes.position;
                 const norm = solidGeoToUse.attributes.normal;
@@ -1522,8 +1776,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const clipPlaneLocal = mainMeshGroup.userData.clipPlane; 
         let clipPlane = null; 
-        if (clipPlaneLocal) clipPlane = clipPlaneLocal.clone().applyMatrix4(matWorld);
+        if (clipPlaneLocal) clipPlane = clipPlaneLocal.clone();
         
+        const isClipped = (v) => clipPlane && clipPlane.distanceToPoint(v) < 0;
         const stats = { renderedLines: 0, totalLines: 0, renderedDots: 0, totalDots: 0 };
         const progressConfig = { start: 10, end: 90 };
         const progressState = { processed: 0, lastPercent: 0, total: 0 };
@@ -1594,8 +1849,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const depthTarget = new THREE.WebGLRenderTarget(depthResW, depthResH);
             const depthMaterial = new THREE.ShaderMaterial({
                 side: THREE.DoubleSide,
-                vertexShader: `varying float vDepth; void main() { vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition; vDepth = -mvPosition.z; }`,
-                fragmentShader: `varying float vDepth; uniform float far; vec4 packDepth(float depth) { const vec4 bitShift = vec4(16777216.0, 65536.0, 256.0, 1.0); const vec4 bitMask = vec4(0.0, 1.0/256.0, 1.0/256.0, 1.0/256.0); vec4 res = fract(depth * bitShift); res -= res.xxyz * bitMask; return res; } void main() { gl_FragColor = packDepth(vDepth / far); }`,
+                clipping: true,
+                clippingPlanes: clipPlane ? [clipPlane] : [],
+                vertexShader: `
+                    #include <clipping_planes_pars_vertex>
+                    varying float vDepth; 
+                    void main() { 
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); 
+                        #include <clipping_planes_vertex>
+                        gl_Position = projectionMatrix * mvPosition; 
+                        vDepth = -mvPosition.z; 
+                    }`,
+                fragmentShader: `
+                    #include <clipping_planes_pars_fragment>
+                    varying float vDepth; 
+                    uniform float far; 
+                    vec4 packDepth(float depth) { 
+                        const vec4 bitShift = vec4(16777216.0, 65536.0, 256.0, 1.0); 
+                        const vec4 bitMask = vec4(0.0, 1.0/256.0, 1.0/256.0, 1.0/256.0); 
+                        vec4 res = fract(depth * bitShift); 
+                        res -= res.xxyz * bitMask; 
+                        return res; 
+                    } 
+                    void main() { 
+                        #include <clipping_planes_fragment>
+                        gl_FragColor = packDepth(vDepth / far); 
+                    }`,
                 uniforms: { far: { value: camera.far } }
             });
             const originalMat = meshSolid.material; meshSolid.material = depthMaterial;
@@ -1695,7 +1974,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const hits = raycaster.intersectObject(meshSolid);
-            return hits.length > 0;
+            for (let i = 0; i < hits.length; i++) {
+                if (!isClipped(hits[i].point)) return true;
+            }
+            return false;
         }
 
         async function smartYield() { 
@@ -1806,8 +2088,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const dStart = camPos.distanceTo(wStart);
             const dEnd = camPos.distanceTo(wEnd);
             
-            const visStart = !checkOcclusion(wStart, dStart);
-            const visEnd = !checkOcclusion(wEnd, dEnd);
+            const visStart = !isClipped(wStart) && !checkOcclusion(wStart, dStart);
+            const visEnd = !isClipped(wEnd) && !checkOcclusion(wEnd, dEnd);
             
             if (visStart === visEnd) {
                 // If both are visible, we promote to collection
@@ -1828,7 +2110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      const mid = pStart.clone().lerp(pEnd, 0.5);
                      const wMid = mid.clone().applyMatrix4(matWorld);
                      const dMid = camPos.distanceTo(wMid);
-                     const visMid = !checkOcclusion(wMid, dMid);
+                     const visMid = !isClipped(wMid) && !checkOcclusion(wMid, dMid);
                      if (visMid) {
                          traceSegmentRecursive(pStart, mid, depth + 1, isSpline);
                          traceSegmentRecursive(mid, pEnd, depth + 1, isSpline);
@@ -1913,7 +2195,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             const pt = precalc[j]; 
                             let visible = pt.inFrustum; 
                             if (!visible) { screenPoints.push({ visible: false }); continue; } 
-                            if (isHiddenLine && meshSolid && checkOcclusion(pt.vWorld, pt.dist)) visible = false; 
+                            if (isClipped(pt.vWorld)) visible = false; 
+                            else if (isHiddenLine && meshSolid && checkOcclusion(pt.vWorld, pt.dist)) visible = false; 
                             screenPoints.push(visible ? { x: pt.p.x, y: pt.p.y, dist: pt.dist, vWorld: pt.vWorld, visible: true } : { visible: false }); 
                         }
                         
@@ -1983,7 +2266,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                      // Entire block is visible
                                      for (let k = j; k < endIdx; k++) {
                                          const s1 = processed[k], s2 = processed[k+1];
-                                         if (clipPlane && (clipPlane.distanceToPoint(s1.w) > 0 || clipPlane.distanceToPoint(s2.w) > 0)) continue;
+                                         if (isClipped(s1.w) || isClipped(s2.w)) continue;
                                          if (s1.out && s2.out) continue;
                                          collectLine(s1.scr, s2.scr, (s1.dist + s2.dist) / 2, _mid.copy(s1.w).lerp(s2.w, 0.5), true);
                                      }
@@ -2068,7 +2351,7 @@ document.addEventListener('DOMContentLoaded', () => {
                for (let i = 0; i < total; i++) {
                   await smartYield();
                   v1.fromBufferAttribute(pos, i).applyMatrix4(matWorld);
-                  if (clipPlane && clipPlane.distanceToPoint(v1) > 0) continue;
+                  if (clipPlane && clipPlane.distanceToPoint(v1) < 0) continue;
                   const s = `${rnd(v1.x)},${rnd(v1.y)},${rnd(v1.z)}`; if (processed.has(s)) continue; processed.add(s);
                   const c1 = v1.clone().applyMatrix4(matView); if (c1.z > -near) continue;
                   const p = project(c1); 
