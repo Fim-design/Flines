@@ -589,6 +589,15 @@ input[type="range"]::-webkit-slider-thumb {
     cursor: pointer;
 }
 
+#version-badge {
+    transition: all 0.2s;
+}
+
+#version-badge:hover {
+    background: var(--accent-hover);
+    transform: scale(1.1);
+}
+
 .sidebar-footer {
     padding: 15px;
     text-align: center;
@@ -597,7 +606,6 @@ input[type="range"]::-webkit-slider-thumb {
     font-weight: 500;
     color: var(--text-muted);
     border-top: 1px solid var(--border);
-    pointer-events: none;
     user-select: none;
 }
 
