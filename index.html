@@ -78,10 +78,10 @@
                                 <option value="sphere">Sphere</option> <!-- Acts as container for Polyhedra -->
                                 <option value="cube">Cube</option>
                                 <option value="torus">Torus</option>
-                                <option value="math">y=f(x,z)</option>
-                                <option value="parametric">Parametric Surface</option>
                                 <option value="grid">Grid / Plane</option>
                                 <option value="landscape">Landscape Generator</option>
+                                <option value="math">Math Surface</option>
+                                <option value="parametric">Parametric Surface</option>
                                 <option value="custom">Upload OBJ...</option>
                             </select>
                         </div>
@@ -308,7 +308,7 @@
                                 <div class="control-header">
                                     <div class="drag-handle">☰</div>
                                     <input type="checkbox" id="use-noise">
-                                    <label for="use-noise">Noise (Simplex)</label>
+                                    <label for="use-noise">Noise</label>
                                 </div>
                                 <div class="sub-controls" id="noise-controls" style="display:none;">
                                     <div class="control">
@@ -570,6 +570,145 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Pinch -->
+                            <div class="control-group" data-type="pinch">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-pinch">
+                                    <label for="use-pinch">Pinch</label>
+                                </div>
+                                <div class="sub-controls" id="pinch-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis</label>
+                                        <select id="pinch-axis">
+                                            <option value="all" selected>All</option>
+                                            <option value="x">X</option>
+                                            <option value="y">Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Strength</label>
+                                        <div class="range-row">
+                                            <input type="range" id="pinch-str" min="0" max="2" step="0.1" value="0.5">
+                                            <input type="number" id="val-pinch-str" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Stretch -->
+                            <div class="control-group" data-type="stretch">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-stretch">
+                                    <label for="use-stretch">Stretch</label>
+                                </div>
+                                <div class="sub-controls" id="stretch-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis</label>
+                                        <select id="stretch-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Amount</label>
+                                        <div class="range-row">
+                                            <input type="range" id="stretch-amt" min="0" max="5" step="0.1" value="0.5">
+                                            <input type="number" id="val-stretch-amt" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Swirl -->
+                            <div class="control-group" data-type="swirl">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-swirl">
+                                    <label for="use-swirl">Swirl</label>
+                                </div>
+                                <div class="sub-controls" id="swirl-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis</label>
+                                        <select id="swirl-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Strength</label>
+                                        <div class="range-row">
+                                            <input type="range" id="swirl-str" min="-5" max="5" step="0.1" value="0.5">
+                                            <input type="number" id="val-swirl-str" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Quantize -->
+                            <div class="control-group" data-type="quantize">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-quantize">
+                                    <label for="use-quantize">Quantize</label>
+                                </div>
+                                <div class="sub-controls" id="quantize-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis</label>
+                                        <select id="quantize-axis">
+                                            <option value="all" selected>All</option>
+                                            <option value="x">X</option>
+                                            <option value="y">Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Steps</label>
+                                        <div class="range-row">
+                                            <input type="range" id="quantize-steps" min="1" max="50" step="1" value="10">
+                                            <input type="number" id="val-quantize-steps" class="val-input" value="10">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Zigzag -->
+                            <div class="control-group" data-type="zigzag">
+                                <div class="control-header">
+                                    <div class="drag-handle">☰</div>
+                                    <input type="checkbox" id="use-zigzag">
+                                    <label for="use-zigzag">Zigzag</label>
+                                </div>
+                                <div class="sub-controls" id="zigzag-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Axis</label>
+                                        <select id="zigzag-axis">
+                                            <option value="x">X</option>
+                                            <option value="y" selected>Y</option>
+                                            <option value="z">Z</option>
+                                        </select>
+                                    </div>
+                                    <div class="control">
+                                        <label>Amplitude</label>
+                                        <div class="range-row">
+                                            <input type="range" id="zigzag-amp" min="0" max="2" step="0.1" value="0.2">
+                                            <input type="number" id="val-zigzag-amp" class="val-input" value="0.2">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Frequency</label>
+                                        <div class="range-row">
+                                            <input type="range" id="zigzag-freq" min="0" max="20" step="0.1" value="5.0">
+                                            <input type="number" id="val-zigzag-freq" class="val-input" value="5.0">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Clipping Plane -->
@@ -731,7 +870,7 @@
                     </div>
                 </div>
             </div>
-            <div class="sidebar-footer">Yefym Turkin <span class="badge">v0.108</span></div>
+            <div class="sidebar-footer"><a href="https://fim.design" target="_blank" style="color: inherit; text-decoration: none;">fim.design</a> <span class="badge" id="version-badge" style="cursor:pointer;">v0.108</span></div>
         </aside>
 
         <!-- Main Viewport -->
@@ -898,7 +1037,7 @@
                     <div class="control">
                         <label>Occluder Inflation</label>
                         <div class="range-row">
-                            <input type="range" id="hl-inflate" min="0" max="0.2" step="0.001" value="0">
+                            <input type="range" id="hl-inflate" min="-0.2" max="0.2" step="0.001" value="0">
                             <input type="number" id="val-hl-inflate" class="val-input" value="0">
                         </div>
                     </div>
@@ -931,9 +1070,9 @@
                         <label>Occlusion Method</label>
                         <select id="hl-method">
                             <option value="gpu">Fastest (GPU)</option>
-                            <option value="precise">Precise (CPU)</option>
-                            <option value="precise-fast">Precise (CPU Simplified)</option>
-                            <option value="simple">Simple (CPU Legacy)</option>
+                            <option value="precise">Precise (CPU, Legacy)</option>
+                            <option value="precise-fast">Medium (CPU, Legacy)</option>
+                            <option value="simple">Simple (CPU, Legacy)</option>
                         </select>
                     </div>
 
@@ -1012,6 +1151,19 @@
             <div style="display:flex; justify-content:flex-end; gap:10px;">
                 <button id="curve-reset" class="btn-primary" style="margin:0; width:auto; background:#444;">Reset Linear</button>
                 <button id="curve-apply" class="btn-primary" style="margin:0; width:auto;">Apply & Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Changelog Modal -->
+    <div id="changelog-modal" class="loader-overlay" style="display:none; background:rgba(0,0,0,0.8);">
+        <div style="background:#1e1e1e; padding:20px; border-radius:8px; width:500px; max-width:90%; max-height: 80vh; border:1px solid #444; box-shadow:0 10px 30px rgba(0,0,0,0.5); display: flex; flex-direction: column;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-shrink: 0;">
+                <h3 style="margin:0; color:#fff; font-size:14px;">Changelog</h3>
+                <button id="changelog-close" class="btn-icon" style="font-size:16px;">&times;</button>
+            </div>
+            <div id="changelog-content" style="flex: 1; overflow-y: auto; background: #111; padding: 15px; border-radius: 4px; border: 1px solid #333; font-family: monospace; font-size: 11px; white-space: pre-wrap; color: #aaa; line-height: 1.5; scrollbar-width: thin; scrollbar-color: #444 #111;">
+                Loading changelog...
             </div>
         </div>
     </div>
