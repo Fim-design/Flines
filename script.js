@@ -1982,7 +1982,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background-color: ${bg}">${outputBuffer}</svg>`;
         }
 
-        // Only create interpolators if DOF is enabled (for performance)        const useDOF = state.zDepth.dof;
+        // Only create interpolators if DOF is enabled (for performance)
+        const useDOF = state.zDepth.dof;
         const opEval = useDOF ? (state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.opCurve) : (t) => evaluateLinear(t, state.dof.opCurve)) : null;
         const sizeEval = useDOF ? (state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.sizeCurve) : (t) => evaluateLinear(t, state.dof.sizeCurve)) : null;
         
