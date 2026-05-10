@@ -191,6 +191,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const presets = [null, null, null, null, null];
     const sphereTypes = ['sphere', 'sphere-circles', 'icosahedron', 'tetrahedron', 'octahedron', 'dodecahedron'];
 
+    function generateMatcapTexture() {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        
+        const grad = ctx.createRadialGradient(size*0.4, size*0.4, 0, size*0.5, size*0.5, size*0.5);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.5, '#888888');
+        grad.addColorStop(1, '#000000');
+        
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, size, size);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.center.set(0.5, 0.5);
+        texture.needsUpdate = true;
+        return texture;
+    }
+    const matcapTexture = generateMatcapTexture();
+
     const shapeConfig = {
         icosahedron: { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Detail', def: 5, min: 1, max: 50, type: 'int', step: 1 }] },
         tetrahedron: { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Detail', def: 5, min: 1, max: 50, type: 'int', step: 1 }] },
@@ -266,6 +288,8 @@ document.addEventListener('DOMContentLoaded', () => {
         legacyHiddenLine: false,
         properOrder: false,
         zDepth: { color: false, opacity: false, dof: false },
+        halftone: { grid: 10, size: 8, angle: 45, invert: false },
+        matcapRotation: { x: 0, y: 0 },
         gradMode: 'camera', 
         gradRot: { x: 0, y: 0 }, 
         baseColor: '#007aff', colorNear: '#ff00ff', colorFar: '#0000ff', gradStart: 0.0, gradEnd: 1.0,
@@ -829,10 +853,83 @@ document.addEventListener('DOMContentLoaded', () => {
         const ambient = new THREE.AmbientLight(0x404040); scene.add(ambient);
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(5, 10, 7); scene.add(dirLight);
         matWireShader = createShaderMaterial();
+        
+        let isRotatingMatcap = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        
+        const onPointerDown = (e) => {
+            if (e.altKey || e.metaKey) {
+                isRotatingMatcap = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                controls.enabled = false;
+                recordDragStart();
+                e.stopImmediatePropagation();
+                e.preventDefault();
+            }
+        };
+
+        const onPointerMove = (e) => {
+            if (isRotatingMatcap) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                
+                state.matcapRotation.y += deltaX * 0.01;
+                state.matcapRotation.x -= deltaY * 0.01;
+                
+                // Wrap rotation between -PI and PI for slider consistency
+                if (state.matcapRotation.y > Math.PI) state.matcapRotation.y -= Math.PI * 2;
+                if (state.matcapRotation.y < -Math.PI) state.matcapRotation.y += Math.PI * 2;
+                if (state.matcapRotation.x > Math.PI) state.matcapRotation.x -= Math.PI * 2;
+                if (state.matcapRotation.x < -Math.PI) state.matcapRotation.x += Math.PI * 2;
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                updateMaterialUniforms();
+                
+                // Sync UI sliders
+                const sliderX = document.getElementById('ht-light-rot-x');
+                const valX = document.getElementById('val-ht-light-rot-x');
+                const sliderY = document.getElementById('ht-light-rot-y');
+                const valY = document.getElementById('val-ht-light-rot-y');
+                
+                if (sliderX) sliderX.value = state.matcapRotation.x;
+                if (valX) valX.value = state.matcapRotation.x.toFixed(2);
+                if (sliderY) sliderY.value = state.matcapRotation.y;
+                if (valY) valY.value = state.matcapRotation.y.toFixed(2);
+                
+                e.stopImmediatePropagation();
+                e.preventDefault();
+            }
+        };
+
+        const onPointerUp = (e) => {
+            if (isRotatingMatcap) {
+                isRotatingMatcap = false;
+                controls.enabled = true;
+                recordDragEnd();
+                e.stopImmediatePropagation();
+            }
+        };
+
+        renderer.domElement.addEventListener('pointerdown', onPointerDown, true);
+        window.addEventListener('pointermove', onPointerMove, true);
+        window.addEventListener('pointerup', onPointerUp, true);
+
+        // Also block standard mouse events to be sure
+        renderer.domElement.addEventListener('mousedown', (e) => { if (e.altKey || e.metaKey) e.stopImmediatePropagation(); }, true);
+
         window.addEventListener('resize', onWindowResize);
     }
 
     function updateMaterialUniforms() {
+        if (mainMeshGroup && mainMeshGroup.userData.solid) {
+            const mat = mainMeshGroup.userData.solid.material;
+            if (mat && mat.userData && mat.userData.shader) {
+                mat.userData.shader.uniforms.matcapRotation.value = state.matcapRotation;
+            }
+        }
         const updateShader = (mat) => {
             if (!mat || !mat.uniforms) return;
             mat.uniforms.useColor.value = state.zDepth.color ? 1 : 0; 
@@ -1066,6 +1163,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         syncInput('hl-inflate', 'val-hl-inflate', (v) => { state.hiddenSettings.inflate = parseFloat(v); updateGeometry(); });
         syncInput('hl-min-len', 'val-hl-min-len', (v) => { state.hiddenSettings.minLen = parseFloat(v); if(state.svgPreview) disableSVGPreview(); });
+        
+        syncInput('ht-grid', 'val-ht-grid', (v) => { state.halftone.grid = parseInt(v); if(state.style === 'halftone') { if(state.svgPreview) disableSVGPreview(); updateGeometry(); } });
+        syncInput('ht-size', 'val-ht-size', (v) => { state.halftone.size = parseFloat(v); if(state.style === 'halftone') { if(state.svgPreview) disableSVGPreview(); updateGeometry(); } });
+        syncInput('ht-angle', 'val-ht-angle', (v) => { state.halftone.angle = parseFloat(v); if(state.style === 'halftone') { if(state.svgPreview) disableSVGPreview(); updateGeometry(); } });
+        syncInput('ht-light-rot-x', 'val-ht-light-rot-x', (v) => { state.matcapRotation.x = parseFloat(v); updateMaterialUniforms(); });
+        syncInput('ht-light-rot-y', 'val-ht-light-rot-y', (v) => { state.matcapRotation.y = parseFloat(v); updateMaterialUniforms(); });
+        document.getElementById('ht-invert').addEventListener('change', (e) => { saveHistory(); state.halftone.invert = e.target.checked; if(state.style === 'halftone') { if(state.svgPreview) disableSVGPreview(); updateGeometry(); } });
 
 
         const hlMethod = document.getElementById('hl-method');
@@ -1274,23 +1378,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         setVal('visual-style', state.style);
-        const showHl = true; setDisplay('hidden-line-settings', showHl);
+        const showHl = ['hidden-line', 'triangles', 'wireframe'].includes(state.style); setDisplay('hidden-line-settings', showHl);
+        const isHalftone = state.style === 'halftone'; setDisplay('halftone-settings', isHalftone);
+
+        setVal('ht-grid', state.halftone.grid); setVal('val-ht-grid', state.halftone.grid);
+        setVal('ht-size', state.halftone.size); setVal('val-ht-size', state.halftone.size);
+        setVal('ht-angle', state.halftone.angle); setVal('val-ht-angle', state.halftone.angle);
+        setVal('ht-light-rot-x', state.matcapRotation.x); setVal('val-ht-light-rot-x', state.matcapRotation.x);
+        setVal('ht-light-rot-y', state.matcapRotation.y); setVal('val-ht-light-rot-y', state.matcapRotation.y);
+        setCheck('ht-invert', state.halftone.invert);
+
         let isSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
         if (state.geoType === 'grid' && state.geoParams[4]) isSpline = true;
         if (state.geoType === 'cube' && state.geoParams[6]) isSpline = true;
         if (state.geoType === 'landscape') isSpline = true;
 
-        const isHiddenLine = state.style === 'hidden-line'; const isWireframe = state.style === 'wireframe';
+        const isHiddenLine = state.style === 'hidden-line'; 
+        const isTriangles = state.style === 'triangles';
+        const isWireframe = state.style === 'wireframe';
+
         setDisplay('grid-uv-controls', isSpline && state.geoType !== 'cone' && state.geoType !== 'cylinder');
         const isPrecise = state.occlusionMethod === 'precise' || state.occlusionMethod === 'precise-fast' || state.occlusionMethod === 'gpu';
-        setDisplay('ctrl-hl-epsilon', isHiddenLine && isPrecise);
+        setDisplay('ctrl-hl-epsilon', (isHiddenLine || isTriangles) && isPrecise);
         setDisplay('ctrl-hl-spline-res', (isHiddenLine || isWireframe) && isSpline && isPrecise);
         
-        setDisplay('ctrl-solid-subdiv', isHiddenLine && isSpline);
+        setDisplay('ctrl-solid-subdiv', (isHiddenLine || isTriangles) && isSpline);
         setVal('solid-subdiv', state.solidSubdiv); setVal('val-solid-subdiv', state.solidSubdiv);
 
-        setDisplay('ctrl-hl-method', isHiddenLine || isWireframe); setDisplay('ctrl-hl-proper-order', true);
-        setDisplay('ctrl-gpu-grid', (isHiddenLine || isWireframe) && state.occlusionMethod === 'gpu');
+        setDisplay('ctrl-hl-method', isHiddenLine || isTriangles || isWireframe); setDisplay('ctrl-hl-proper-order', true);
+        setDisplay('ctrl-gpu-grid', (isHiddenLine || isTriangles || isWireframe) && state.occlusionMethod === 'gpu');
 
         setVal('hl-epsilon', state.hiddenSettings.epsilon); setVal('val-hl-epsilon', state.hiddenSettings.epsilon); setVal('hl-spline-res', state.hiddenSettings.splineRes); setVal('val-hl-spline-res', state.hiddenSettings.splineRes);
         setVal('hl-method', state.occlusionMethod); setVal('gpu-grid', state.gpuGridSize); setCheck('hl-proper-order', state.properOrder);        setVal('hl-bias', state.hiddenSettings.bias); setVal('val-hl-bias', state.hiddenSettings.bias);
@@ -1549,7 +1665,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const geoWire = generateBaseGeometry(1);
         
-        const isHiddenLine = state.style === 'hidden-line' || state.style === 'dots-solid';
+        const isHiddenLine = state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid';
         let isSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
         if (state.geoType === 'grid' && state.geoParams[4]) isSpline = true;
         if (state.geoType === 'cube' && state.geoParams[6]) isSpline = true;
@@ -1615,7 +1731,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const style = state.style; let meshWire; let meshSolid;
-        if (style === 'hidden-line' || style === 'dots-solid') {
+        if (style === 'hidden-line' || style === 'triangles' || style === 'dots-solid' || style === 'halftone') {
             
             let solidGeoToUse = geoSolid;
             if (Math.abs(state.hiddenSettings.inflate) > 0.0001) {
@@ -1633,12 +1749,48 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            const matSolid = new THREE.MeshPhongMaterial({ color: 0x111111, specular: 0x000000, polygonOffset: true, polygonOffsetFactor: state.hiddenSettings.bias, polygonOffsetUnits: state.hiddenSettings.bias, flatShading: true, side: THREE.DoubleSide, clippingPlanes: clipPlanes, clipShadows: true });
+            let matSolid;
+            if (style === 'halftone') {
+                matSolid = new THREE.MeshMatcapMaterial({ matcap: matcapTexture, side: THREE.DoubleSide, clippingPlanes: clipPlanes, clipShadows: true });
+                matSolid.onBeforeCompile = (shader) => {
+                    matSolid.userData.shader = shader;
+                    shader.uniforms.matcapRotation = { get value() { return state.matcapRotation; } };
+                    shader.fragmentShader = "uniform vec2 matcapRotation;\n" + shader.fragmentShader;
+                    shader.fragmentShader = shader.fragmentShader.replace(
+                        'vec4 matcapColor = texture2D( matcap, uv );',
+                        `
+                        vec2 rotatedUV = uv - 0.5;
+                        
+                        // X rotation (actually vertical shift in UV space)
+                        float sX = sin(matcapRotation.x);
+                        float cX = cos(matcapRotation.x);
+                        
+                        // Y rotation (horizontal spin)
+                        float sY = sin(matcapRotation.y);
+                        float cY = cos(matcapRotation.y);
+                        
+                        // Apply 2D rotation for Y spin
+                        vec2 spinUV;
+                        spinUV.x = rotatedUV.x * cY - rotatedUV.y * sY;
+                        spinUV.y = rotatedUV.x * sY + rotatedUV.y * cY;
+                        
+                        // For X rotation, we treat it as a vertical offset or secondary rotation
+                        // A more complete way is 3D normal rotation, but for Matcaps 2D rotation + offsets works well.
+                        // Let's use simple 2D rotation for Y and treat X as a direct offset for now to keep it intuitive.
+                        vec4 matcapColor = texture2D( matcap, spinUV + 0.5 + vec2(0.0, matcapRotation.x * 0.5) );
+                        `
+                    );
+                };
+            } else {
+                matSolid = new THREE.MeshPhongMaterial({ color: 0x111111, specular: 0x000000, polygonOffset: true, polygonOffsetFactor: state.hiddenSettings.bias, polygonOffsetUnits: state.hiddenSettings.bias, flatShading: true, side: THREE.DoubleSide, clippingPlanes: clipPlanes, clipShadows: true });
+            }
             meshSolid = new THREE.Mesh(solidGeoToUse, matSolid);
             mainMeshGroup.add(meshSolid);
         }
 
-        if (style === 'dots' || style === 'dots-solid') {
+        if (style === 'halftone') {
+            meshWire = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({visible: false}));
+        } else if (style === 'dots' || style === 'dots-solid') {
             const m = matWireShader.clone(); m.clipping = true; m.clippingPlanes = clipPlanes;
             meshWire = new THREE.Points(geoWire, m);
         } else {
@@ -1650,7 +1802,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.geoType === 'sphere') useSpline = true; 
 
             let wireGeo;
-            if (state.geoType === 'sphere-circles') {
+            if (state.style === 'triangles') {
+                wireGeo = new THREE.WireframeGeometry(geoWire);
+            } else if (state.geoType === 'sphere-circles') {
                 wireGeo = createOverlappingCirclesWireframe(state.geoParams);
                 applyDeformations(wireGeo, { skipNormals: true });
             } else if (useSpline) {
@@ -1746,17 +1900,96 @@ document.addEventListener('DOMContentLoaded', () => {
     async function computeSVG({ onProgress, onChunk, signal } = {}) {
         await new Promise(r => setTimeout(r, 0));
         const width = container.clientWidth, height = container.clientHeight;
-        const bg = state.style.includes('hidden') ? '#111' : 'transparent';
-        
-        // Only create interpolators if DOF is enabled (for performance)
-        const useDOF = state.zDepth.dof;
+        const bg = state.style.includes('hidden') || state.style === 'halftone' ? '#111' : 'transparent';
+
+        if (state.style === 'halftone') {
+            if (onProgress) onProgress(10, 'Rendering halftone map...', { stats: { lines: 0, totalLines: 0, dots: 0, totalDots: 0 } });
+            const rt = new THREE.WebGLRenderTarget(width, height, { format: THREE.RGBAFormat });
+            const oldBg = scene.background;
+            scene.background = null;
+
+            const oldAlpha = renderer.getClearAlpha();
+            const oldCol = renderer.getClearColor(new THREE.Color());
+            renderer.setClearColor(0x000000, 0);
+
+            const meshWire = mainMeshGroup.userData.wire;
+            if(meshWire) meshWire.visible = false;
+
+            renderer.setRenderTarget(rt);
+            renderer.clear();
+            renderer.render(scene, camera);
+            renderer.setRenderTarget(null);
+
+            if(meshWire) meshWire.visible = true;
+            scene.background = oldBg;
+            renderer.setClearColor(oldCol, oldAlpha);
+
+            const buffer = new Uint8Array(width * height * 4);
+            renderer.readRenderTargetPixels(rt, 0, 0, width, height, buffer);
+            rt.dispose();
+
+            if (onProgress) onProgress(40, 'Generating dots...', { stats: { lines: 0, totalLines: 0, dots: 0, totalDots: 0 } });
+            let outputBuffer = '';
+            const step = Math.max(2, state.halftone.grid);
+            const maxSize = state.halftone.size;
+            const angleRad = state.halftone.angle * Math.PI / 180;
+            const sinA = Math.sin(angleRad);
+            const cosA = Math.cos(angleRad);
+
+            const cx = width / 2;
+            const cy = height / 2;
+            const diag = Math.sqrt(width*width + height*height);
+            const startX = -diag/2;
+            const endX = diag/2;
+            const startY = -diag/2;
+            const endY = diag/2;
+
+            let dotCount = 0;
+
+            for (let ry = startY; ry < endY; ry += step) {
+                for (let rx = startX; rx < endX; rx += step) {
+                    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+                    const px = Math.round(cx + rx * cosA - ry * sinA);
+                    const py = Math.round(cy + rx * sinA + ry * cosA);
+
+                    if (px >= 0 && px < width && py >= 0 && py < height) {
+                        const bufY = height - 1 - py;
+                        const idx = (bufY * width + px) * 4;
+                        const alpha = buffer[idx+3];
+
+                        if (alpha < 128) continue;
+
+                        const r = buffer[idx];
+                        const g = buffer[idx+1];
+                        const b = buffer[idx+2];
+                        const brightness = (r + g + b) / (3 * 255);
+
+                        let val = state.halftone.invert ? brightness : (1.0 - brightness);
+
+                        if (val > 0.05) {
+                            const radius = (maxSize / 2) * val;
+                            if (radius > 0.1) {
+                                const circleStr = `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${radius.toFixed(2)}" fill="${state.baseColor}"/>`;
+                                outputBuffer += circleStr;
+                                dotCount++;
+                                if (onChunk) onChunk(circleStr, { type: 'dot', final: false });
+                            }
+                        }
+                    }
+                }
+            }
+            if (onProgress) onProgress(100, 'Done', { stats: { lines: 0, totalLines: 0, dots: dotCount, totalDots: dotCount } });
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background-color: ${bg}">${outputBuffer}</svg>`;
+        }
+
+        // Only create interpolators if DOF is enabled (for performance)        const useDOF = state.zDepth.dof;
         const opEval = useDOF ? (state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.opCurve) : (t) => evaluateLinear(t, state.dof.opCurve)) : null;
         const sizeEval = useDOF ? (state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.sizeCurve) : (t) => evaluateLinear(t, state.dof.sizeCurve)) : null;
         
         const meshWire = mainMeshGroup.userData.wire; 
         const meshSolid = mainMeshGroup.userData.solid; 
         const isDots = (state.style === 'dots' || state.style === 'dots-solid'); 
-        const isHiddenLine = (state.style === 'hidden-line' || state.style === 'dots-solid');
+        const isHiddenLine = (state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid');
         
         const splineGroups = meshWire.geometry.userData.splineGroups;
         camera.updateMatrixWorld(); 
