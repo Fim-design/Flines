@@ -870,7 +870,7 @@
                     </div>
                 </div>
             </div>
-            <div class="sidebar-footer"><a href="https://fim.design" target="_blank" style="color: inherit; text-decoration: none;">fim.design</a> <span class="badge" id="version-badge" style="cursor:pointer;">v0.108</span></div>
+            <div class="sidebar-footer"><a href="https://fim.design" target="_blank" style="color: inherit; text-decoration: none;">fim.design</a> <span class="badge" id="version-badge" style="cursor:pointer;">v0.109</span></div>
         </aside>
 
         <!-- Main Viewport -->
@@ -1010,6 +1010,7 @@
                         <option value="dots">Dots (X-Ray)</option>
                         <option value="dots-solid">Dots (Solid)</option>
                         <option value="halftone">Halftone</option>
+                        <option value="checkerboard">Checkerboard</option>
                     </select>
                 </div>
 
@@ -1027,14 +1028,13 @@
                         </div>
                     </div>
 
-                    <div class="control">
+                    <div class="control" id="ctrl-ht-size">
                         <label>Dot Max Size (px)</label>
                         <div class="range-row">
                             <input type="range" id="ht-size" min="1" max="30" step="0.5" value="8">
                             <input type="number" id="val-ht-size" class="val-input" value="8">
-                        </div> 
+                        </div>
                     </div>
-
                     <div class="control">
                         <label>Angle (deg)</label>
                         <div class="range-row">
@@ -1063,6 +1063,30 @@
                          <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
                             <input type="checkbox" id="ht-invert">
                             Invert Brightness
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Checkerboard Settings -->
+                <div id="checkerboard-settings" style="display:none; margin-bottom:15px; padding:10px; background:#222; border-radius:4px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                        <label style="color:#aaa; font-size:11px; margin:0;">Checkerboard Settings</label>
+                    </div>
+
+                    <div class="control" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label>Color 1</label>
+                        <input type="color" id="cb-col1" value="#ffffff">
+                    </div>
+
+                    <div class="control" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <label>Color 2</label>
+                        <input type="color" id="cb-col2" value="#000000">
+                    </div>
+
+                    <div class="control">
+                         <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                            <input type="checkbox" id="cb-invert">
+                            Invert Pattern
                         </label>
                     </div>
                 </div>
