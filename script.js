@@ -289,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         properOrder: false,
         zDepth: { color: false, opacity: false, dof: false },
         halftone: { grid: 10, size: 8, angle: 45, invert: false },
+        checkerboard: { col1: '#ffffff', col2: '#000000', invert: false },
         matcapRotation: { x: 0, y: 0 },
         gradMode: 'camera', 
         gradRot: { x: 0, y: 0 }, 
@@ -577,6 +578,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!badge || !modal || !content || !closeBtn) return;
 
         const changelogText = `█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█   VERSION 0.109   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+└── [NEW] Checkerboard Visual Style
+    ├── Mesh-based polygon patterning
+    ├── UV-aware (seamless on spheres/wraps)
+    └── Integrated with GPU depth-capture
+
+
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
 █   VERSION 0.108   █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 │
@@ -1171,6 +1183,10 @@ document.addEventListener('DOMContentLoaded', () => {
         syncInput('ht-light-rot-y', 'val-ht-light-rot-y', (v) => { state.matcapRotation.y = parseFloat(v); updateMaterialUniforms(); });
         document.getElementById('ht-invert').addEventListener('change', (e) => { saveHistory(); state.halftone.invert = e.target.checked; if(state.style === 'halftone') { if(state.svgPreview) disableSVGPreview(); updateGeometry(); } });
 
+        const bindCbCol = (id, key) => { const el = document.getElementById(id); if (el) { el.addEventListener('change', () => saveHistory()); el.addEventListener('input', (e) => { state.checkerboard[key] = e.target.value; if(state.svgPreview) disableSVGPreview(); }); } };
+        bindCbCol('cb-col1', 'col1'); bindCbCol('cb-col2', 'col2');
+        document.getElementById('cb-invert').addEventListener('change', (e) => { saveHistory(); state.checkerboard.invert = e.target.checked; if(state.svgPreview) disableSVGPreview(); });
+
 
         const hlMethod = document.getElementById('hl-method');
         if (hlMethod) hlMethod.addEventListener('change', (e) => {
@@ -1380,6 +1396,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal('visual-style', state.style);
         const showHl = ['hidden-line', 'triangles', 'wireframe'].includes(state.style); setDisplay('hidden-line-settings', showHl);
         const isHalftone = state.style === 'halftone'; setDisplay('halftone-settings', isHalftone);
+        const isCheckerboard = state.style === 'checkerboard'; setDisplay('checkerboard-settings', isCheckerboard);
 
         setVal('ht-grid', state.halftone.grid); setVal('val-ht-grid', state.halftone.grid);
         setVal('ht-size', state.halftone.size); setVal('val-ht-size', state.halftone.size);
@@ -1387,6 +1404,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal('ht-light-rot-x', state.matcapRotation.x); setVal('val-ht-light-rot-x', state.matcapRotation.x);
         setVal('ht-light-rot-y', state.matcapRotation.y); setVal('val-ht-light-rot-y', state.matcapRotation.y);
         setCheck('ht-invert', state.halftone.invert);
+
+        setVal('cb-col1', state.checkerboard.col1); setVal('cb-col2', state.checkerboard.col2);
+        setCheck('cb-invert', state.checkerboard.invert);
 
         let isSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
         if (state.geoType === 'grid' && state.geoParams[4]) isSpline = true;
@@ -1497,29 +1517,49 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'tetrahedron': geo = new THREE.TetrahedronGeometry(p[0], addDetail(p[1])); break;
             case 'octahedron': geo = new THREE.OctahedronGeometry(p[0], addDetail(p[1])); break;
             case 'dodecahedron': geo = new THREE.DodecahedronGeometry(p[0], addDetail(p[1])); break;
-            case 'cube': geo = new THREE.BoxGeometry(p[0], p[1], p[2], mult(p[3]), mult(p[4]), mult(p[5])); break;
-            case 'sphere': geo = new THREE.SphereGeometry(p[0], mult(p[1]), mult(p[2])); break;
+            case 'cube': 
+                geo = new THREE.BoxGeometry(p[0], p[1], p[2], mult(p[3]), mult(p[4]), mult(p[5])); 
+                geo.userData.wSegs = mult(p[3]); geo.userData.hSegs = mult(p[4]); geo.userData.dSegs = mult(p[5]);
+                break;
+            case 'sphere': 
+                geo = new THREE.SphereGeometry(p[0], mult(p[1]), mult(p[2])); 
+                geo.userData.wSegs = mult(p[1]); geo.userData.hSegs = mult(p[2]);
+                break;
             case 'sphere-circles': {
                 const circleSegs = Math.max(8, mult(p[1]));
                 geo = new THREE.SphereGeometry(p[0], circleSegs, circleSegs);
+                geo.userData.wSegs = circleSegs; geo.userData.hSegs = circleSegs;
                 break;
             }
-            case 'landscape': geo = generateLandscapeGeometry(detailMultiplier); break;
-            case 'torus': geo = new THREE.TorusGeometry(p[0], p[1], mult(p[2]), mult(p[3])); break;
-            case 'ring': geo = new THREE.RingGeometry(p[0], p[1], mult(p[2]), mult(p[3])); break;
-            case 'grid': geo = new THREE.PlaneGeometry(p[0], p[1], mult(p[2]), mult(p[3])); break;
+            case 'landscape': 
+                geo = generateLandscapeGeometry(detailMultiplier); 
+                geo.userData.wSegs = Math.round(p[2] * detailMultiplier); geo.userData.hSegs = Math.round(p[3] * detailMultiplier);
+                break;
+            case 'torus': 
+                geo = new THREE.TorusGeometry(p[0], p[1], mult(p[2]), mult(p[3])); 
+                geo.userData.wSegs = mult(p[3]); geo.userData.hSegs = mult(p[2]);
+                break;
+            case 'ring': 
+                geo = new THREE.RingGeometry(p[0], p[1], mult(p[2]), mult(p[3])); 
+                geo.userData.wSegs = mult(p[2]); geo.userData.hSegs = mult(p[3]);
+                break;
+            case 'grid': 
+                geo = new THREE.PlaneGeometry(p[0], p[1], mult(p[2]), mult(p[3])); 
+                geo.userData.wSegs = mult(p[2]); geo.userData.hSegs = mult(p[3]);
+                break;
             case 'math': {
                 const range = p[0], segs = mult(p[1]);
                 const mathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const atan2 = Math.atan2; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const sign = Math.sign; const hypot = Math.hypot; const random = Math.random; const a = ${state.mathVars.a}; const b = ${state.mathVars.b}; const c = ${state.mathVars.c};`;
                 const errEl = document.getElementById('math-error');
-                let func; try { 
-                    func = new Function('x', 'z', mathContext + 'return ' + state.mathFormula + ';'); 
+                let func; try {
+                    func = new Function('x', 'z', mathContext + 'return ' + state.mathFormula + ';');
                     if(errEl) errEl.style.display = 'none';
-                } catch(e) { 
+                } catch(e) {
                     if(errEl) errEl.style.display = 'block';
-                    return new THREE.PlaneGeometry(range*2, range*2, segs, segs); 
+                    return new THREE.PlaneGeometry(range*2, range*2, segs, segs);
                 }
                 geo = new THREE.PlaneGeometry(range * 2, range * 2, segs, segs);
+                geo.userData.wSegs = segs; geo.userData.hSegs = segs;
                 const pos = geo.attributes.position; for(let i=0; i<pos.count; i++){ const x = pos.getX(i), z = pos.getY(i); let y = 0; try { y = func(x, z); } catch(e) { y = 0; } pos.setXYZ(i, x, y, z); }
                 geo.computeVertexNormals();
                 break;
@@ -1528,16 +1568,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 const uMin = p[0], uMax = p[1], vMin = p[2], vMax = p[3], pSegs = mult(p[4]);
                 const pMathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const atan2 = Math.atan2; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const sign = Math.sign; const hypot = Math.hypot; const random = Math.random;`;
                 const errEl = document.getElementById('param-error');
-                let funcX, funcY, funcZ; try { 
-                    funcX = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.x + ';'); 
-                    funcY = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.y + ';'); 
-                    funcZ = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.z + ';'); 
+                let funcX, funcY, funcZ; try {
+                    funcX = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.x + ';');
+                    funcY = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.y + ';');
+                    funcZ = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.z + ';');
                     if(errEl) errEl.style.display = 'none';
-                } catch(e) { 
+                } catch(e) {
                     if(errEl) errEl.style.display = 'block';
-                    return new THREE.PlaneGeometry(5, 5, pSegs, pSegs); 
+                    return new THREE.PlaneGeometry(5, 5, pSegs, pSegs);
                 }
                 geo = new THREE.PlaneGeometry(1, 1, pSegs, pSegs);
+                geo.userData.wSegs = pSegs; geo.userData.hSegs = pSegs;
                 const posP = geo.attributes.position; for(let i=0; i<posP.count; i++){ const rawU = posP.getX(i), rawV = posP.getY(i); const normU = rawU + 0.5, normV = rawV + 0.5; const u = uMin + (normU * (uMax - uMin)), v = vMin + (normV * (vMax - vMin)); let valX=0, valY=0, valZ=0; try { valX = funcX(u, v); valY = funcY(u, v); valZ = funcZ(u, v); } catch(e) { } posP.setXYZ(i, valX, valY, valZ); }
                 geo.computeVertexNormals();
                 break;
@@ -1545,6 +1586,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'custom': geo = originalGeometry ? originalGeometry.clone() : new THREE.BoxGeometry(1,1,1); break;
             default: geo = new THREE.BoxGeometry(1,1,1);
         }
+
         return geo;
     }
 
@@ -1665,7 +1707,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const geoWire = generateBaseGeometry(1);
         
-        const isHiddenLine = state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid';
+        const isHiddenLine = state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid' || state.style === 'halftone' || state.style === 'checkerboard';
         let isSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
         if (state.geoType === 'grid' && state.geoParams[4]) isSpline = true;
         if (state.geoType === 'cube' && state.geoParams[6]) isSpline = true;
@@ -1731,7 +1773,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const style = state.style; let meshWire; let meshSolid;
-        if (style === 'hidden-line' || style === 'triangles' || style === 'dots-solid' || style === 'halftone') {
+        if (style === 'hidden-line' || style === 'triangles' || style === 'dots-solid' || style === 'halftone' || style === 'checkerboard') {
             
             let solidGeoToUse = geoSolid;
             if (Math.abs(state.hiddenSettings.inflate) > 0.0001) {
@@ -1760,20 +1802,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         'vec4 matcapColor = texture2D( matcap, uv );',
                         `
                         vec2 rotatedUV = uv - 0.5;
-                        
+
                         // X rotation (actually vertical shift in UV space)
                         float sX = sin(matcapRotation.x);
                         float cX = cos(matcapRotation.x);
-                        
+
                         // Y rotation (horizontal spin)
                         float sY = sin(matcapRotation.y);
                         float cY = cos(matcapRotation.y);
-                        
+
                         // Apply 2D rotation for Y spin
                         vec2 spinUV;
                         spinUV.x = rotatedUV.x * cY - rotatedUV.y * sY;
                         spinUV.y = rotatedUV.x * sY + rotatedUV.y * cY;
-                        
+
                         // For X rotation, we treat it as a vertical offset or secondary rotation
                         // A more complete way is 3D normal rotation, but for Matcaps 2D rotation + offsets works well.
                         // Let's use simple 2D rotation for Y and treat X as a direct offset for now to keep it intuitive.
@@ -1846,7 +1888,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if(cont) { cont.style.display = 'block'; cont.innerHTML = ''; } if(canv) canv.style.opacity = '0'; if(info) info.textContent = "Export matches the preview exactly."; if(pLoader) pLoader.style.display = 'flex'; if(pBar) pBar.style.width = '0%';
         const cancelHandler = (e) => { if (e.key === 'Escape') { disableSVGPreview(); document.removeEventListener('keydown', cancelHandler); } }; document.addEventListener('keydown', cancelHandler);
         try {
-            const width = container.clientWidth, height = container.clientHeight, bg = state.style.includes('hidden') ? '#111' : 'transparent';
+            const width = container.clientWidth, height = container.clientHeight, bg = state.style.includes('hidden') || state.style === 'halftone' || state.style === 'checkerboard' ? '#111' : 'transparent';
             cont.innerHTML = `<svg id="preview-svg-root" xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background-color: ${bg}"></svg>`; const svgRoot = document.getElementById('preview-svg-root');
             await new Promise(r => setTimeout(r, 50)); updateMaterialUniforms();
             const finalSVG = await computeSVG({
@@ -1872,7 +1914,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const loader = document.getElementById('loader'), loaderBar = document.getElementById('loader-bar'), loaderDetails = document.getElementById('loader-details'), loaderProc = document.getElementById('loader-processing'), loaderRes = document.getElementById('loader-result'), resultMsg = document.getElementById('loader-result-msg'), loaderStats = document.getElementById('loader-stats');
         loader.style.display = 'flex'; loaderProc.style.display = 'block'; loaderRes.style.display = 'none'; loaderBar.style.width = '0%'; loaderDetails.textContent = 'Initializing...'; if(loaderStats) loaderStats.textContent = 'Lines: 0/0 | Dots: 0/0';
         if (!state.svgPreview) { state.svgPreview = true; cachedSVGContent = null; document.getElementById('svg-container').style.display = 'block'; document.getElementById('canvas-container').style.opacity = '0'; }
-        const width = container.clientWidth, height = container.clientHeight, bg = state.style.includes('hidden') ? '#111' : 'transparent';
+        const width = container.clientWidth, height = container.clientHeight, bg = state.style.includes('hidden') || state.style === 'halftone' || state.style === 'checkerboard' ? '#111' : 'transparent';
         document.getElementById('svg-container').innerHTML = `<svg id="export-svg-root" xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background-color: ${bg}"></svg>`;
         await new Promise(r => setTimeout(r, 50));
         try {
@@ -1900,8 +1942,157 @@ document.addEventListener('DOMContentLoaded', () => {
     async function computeSVG({ onProgress, onChunk, signal } = {}) {
         await new Promise(r => setTimeout(r, 0));
         const width = container.clientWidth, height = container.clientHeight;
-        const bg = state.style.includes('hidden') || state.style === 'halftone' ? '#111' : 'transparent';
+        const bg = state.style.includes('hidden') || state.style === 'halftone' || state.style === 'checkerboard' ? '#111' : 'transparent';
 
+        const meshWire = mainMeshGroup.userData.wire;
+        const meshSolid = mainMeshGroup.userData.solid;
+        const isDots = (state.style === 'dots' || state.style === 'dots-solid');
+        const isHiddenLine = (state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid' || state.style === 'halftone' || state.style === 'checkerboard');
+        
+        const splineGroups = meshWire ? meshWire.geometry.userData.splineGroups : null;
+        camera.updateMatrixWorld();
+        const matWorld = meshWire ? meshWire.matrixWorld : new THREE.Matrix4();
+        const matView = camera.matrixWorldInverse;
+        const matProj = camera.projectionMatrix;
+        const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
+        const halfW = width / 2, halfH = height / 2, near = camera.near;
+
+        // --- Core Helpers ---
+        const _vProj = new THREE.Vector3();
+        const _c1 = new THREE.Vector3();
+        function project(vCam) { 
+            _vProj.copy(vCam).applyMatrix4(matProj); 
+            return { x: (_vProj.x * halfW) + halfW, y: -(_vProj.y * halfH) + halfH, w: _vProj.w }; 
+        }
+
+        const clipPlaneLocal = mainMeshGroup.userData.clipPlane; 
+        let clipPlane = null; 
+        if (clipPlaneLocal) clipPlane = clipPlaneLocal.clone();
+        const isClipped = (v) => clipPlane && clipPlane.distanceToPoint(v) < 0;
+
+        const stats = { renderedLines: 0, totalLines: 0, renderedDots: 0, totalDots: 0 };
+        const progressConfig = { start: 10, end: 90 };
+        const progressState = { processed: 0, lastPercent: 0, total: 0 };
+        function getStatsSnapshot() { return { lines: stats.renderedLines, totalLines: stats.totalLines, dots: stats.renderedDots, totalDots: stats.totalDots }; }
+        function pushProgress(percent, message) {
+            if (!onProgress) return;
+            const clamped = Math.max(0, Math.min(100, percent));
+            progressState.lastPercent = Math.max(progressState.lastPercent, clamped);
+            onProgress(clamped, message, { stats: getStatsSnapshot() });
+        }
+        function updateStreamingProgress(message) {
+            if (!onProgress) return;
+            const ratio = progressState.total > 0 ? Math.min(1, progressState.processed / progressState.total) : 0;
+            const rawPercent = progressConfig.start + ratio * (progressConfig.end - progressConfig.start);
+            const rounded = Math.round(rawPercent);
+            const percent = Math.min(progressConfig.end, Math.max(progressState.lastPercent, rounded));
+            if (!message && percent === progressState.lastPercent) return;
+            progressState.lastPercent = Math.max(progressState.lastPercent, percent);
+            onProgress(percent, message, { stats: getStatsSnapshot() });
+        }
+        function tickProgress(amount = 1, message) {
+            if (amount > 0) progressState.processed += amount;
+            updateStreamingProgress(message);
+        }
+        function reportLineSegment(lineStr) {
+            if (onChunk) onChunk(lineStr, { type: 'line', final: false });
+        }
+        function reportDotSegment(circleStr) {
+            if (onChunk) onChunk(circleStr, { type: 'dot', final: false });
+        }
+        function countSplines() {
+            if (!splineGroups) return 0;
+            return splineGroups.reduce((acc, group) => acc + ((Array.isArray(group.splines)) ? group.splines.length : 0), 0);
+        }
+        function setTotals() {
+            const splineTotal = countSplines();
+            const posAttr = (meshWire && meshWire.geometry && meshWire.geometry.attributes) ? meshWire.geometry.attributes.position : null;
+            const posCount = posAttr ? posAttr.count : 0;
+            const edgeCount = Math.floor(posCount / 2);
+            stats.totalLines = !isDots ? Math.max(0, splineTotal || edgeCount) : 0;
+            stats.totalDots = isDots ? posCount : 0;
+            progressState.total = Math.max(1, stats.totalLines + stats.totalDots);
+        }
+        function markLineRendered(message) {
+            if (stats.totalLines === 0) return;
+            stats.renderedLines = Math.min(stats.renderedLines + 1, stats.totalLines);
+            tickProgress(1, message || 'Processing lines...');
+        }
+        function markDotRendered(message) {
+            if (stats.totalDots === 0) return;
+            stats.renderedDots = Math.min(stats.renderedDots + 1, stats.totalDots);
+            tickProgress(1, message || 'Processing dots...');
+        }
+        setTotals();
+
+        const raycaster = new THREE.Raycaster();
+        const rayDir = new THREE.Vector3();
+        
+        // Ensure bounding volumes for occlusion
+        if (meshSolid && meshSolid.geometry && !meshSolid.geometry.boundingSphere) { 
+            meshSolid.geometry.computeBoundingSphere(); 
+            meshSolid.geometry.computeBoundingBox(); 
+        }
+
+        // We'll need a way to access gpuDepthData and depthResW/H inside checkOcclusion
+        let gpuDepthData = null;
+        let depthResW = Math.max(2560, Math.floor(width * 4.0));
+        let depthResH = Math.max(2560, Math.floor(height * 4.0));
+
+        function checkOcclusion(targetPoint, maxDist) {
+            if (!isHiddenLine || !meshSolid) return false;
+            if (state.occlusionMethod === 'gpu' && gpuDepthData) {
+                _c1.copy(targetPoint).applyMatrix4(matView);
+                _vProj.copy(_c1).applyMatrix4(matProj);
+                const tx = (_vProj.x * 0.5 + 0.5), ty = (_vProj.y * 0.5 + 0.5);
+                if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return false;
+                const fx = tx * (depthResW - 1), fy = ty * (depthResH - 1);
+                const ix = Math.floor(fx), iy = Math.floor(fy);
+                let storedDepth;
+                const gridSize = state.gpuGridSize || 1;
+                if (gridSize <= 1) {
+                    const wx = fx - ix, wy = fy - iy, nx = Math.min(depthResW - 1, ix + 1), ny = Math.min(depthResH - 1, iy + 1);
+                    const d00 = gpuDepthData[iy * depthResW + ix], d10 = gpuDepthData[iy * depthResW + nx], d01 = gpuDepthData[ny * depthResW + ix], d11 = gpuDepthData[ny * depthResW + nx];
+                    storedDepth = (d00 * (1 - wx) * (1 - wy) + d10 * wx * (1 - wy) + d01 * (1 - wx) * wy + d11 * wx * wy) * camera.far;
+                } else {
+                    let minD = 1.0; const radius = Math.floor(gridSize / 2);
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            const nx = Math.max(0, Math.min(depthResW - 1, ix + dx)), ny = Math.max(0, Math.min(depthResH - 1, iy + dy));
+                            const d = gpuDepthData[ny * depthResW + nx]; if (d < minD) minD = d;
+                        }
+                    }
+                    storedDepth = minD * camera.far;
+                }
+                const currentDepth = -_c1.z;
+                const bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.0005;
+                return currentDepth > storedDepth + bias;
+            }
+            rayDir.subVectors(targetPoint, camPos).normalize();
+            raycaster.set(camPos, rayDir);
+            const exportBias = state.hiddenSettings.bias * 0.1, epsilon = state.hiddenSettings.epsilon;
+            if (exportBias > 0 && epsilon > 0) raycaster.far = maxDist - epsilon - exportBias;
+            else if (exportBias > 0) raycaster.far = maxDist - exportBias;
+            else if (epsilon > 0) raycaster.far = maxDist - epsilon;
+            else raycaster.far = maxDist;
+            const hits = raycaster.intersectObject(meshSolid);
+            for (let i = 0; i < hits.length; i++) { if (!isClipped(hits[i].point)) return true; }
+            return false;
+        }
+
+        const checkSignal = () => { if (signal && signal.aborted) throw new Error('Cancelled'); };
+        let lastYield = performance.now(); const YIELD_MS = 30;
+        async function smartYield() { 
+            if (performance.now() - lastYield > YIELD_MS) { 
+                await new Promise(r => setTimeout(r, 0)); 
+                lastYield = performance.now(); 
+                checkSignal(); 
+                return true; 
+            } 
+            return false; 
+        }
+
+        // --- Style Specific Logic ---
         if (state.style === 'halftone') {
             if (onProgress) onProgress(10, 'Rendering halftone map...', { stats: { lines: 0, totalLines: 0, dots: 0, totalDots: 0 } });
             const rt = new THREE.WebGLRenderTarget(width, height, { format: THREE.RGBAFormat });
@@ -1912,7 +2103,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const oldCol = renderer.getClearColor(new THREE.Color());
             renderer.setClearColor(0x000000, 0);
 
-            const meshWire = mainMeshGroup.userData.wire;
             if(meshWire) meshWire.visible = false;
 
             renderer.setRenderTarget(rt);
@@ -1982,102 +2172,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background-color: ${bg}">${outputBuffer}</svg>`;
         }
 
-        // Only create interpolators if DOF is enabled (for performance)
-        const useDOF = state.zDepth.dof;
-        const opEval = useDOF ? (state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.opCurve) : (t) => evaluateLinear(t, state.dof.opCurve)) : null;
-        const sizeEval = useDOF ? (state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.sizeCurve) : (t) => evaluateLinear(t, state.dof.sizeCurve)) : null;
-        
-        const meshWire = mainMeshGroup.userData.wire; 
-        const meshSolid = mainMeshGroup.userData.solid; 
-        const isDots = (state.style === 'dots' || state.style === 'dots-solid'); 
-        const isHiddenLine = (state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid');
-        
-        const splineGroups = meshWire.geometry.userData.splineGroups;
-        camera.updateMatrixWorld(); 
-        const matWorld = meshWire.matrixWorld; 
-        const matView = camera.matrixWorldInverse; 
-        const matProj = camera.projectionMatrix; 
-        const camPos = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
-        const halfW = width / 2, halfH = height / 2, near = camera.near; 
-        
-        const raycaster = new THREE.Raycaster(); 
-        const rayDir = new THREE.Vector3();
-        
-        if (meshSolid && meshSolid.geometry && !meshSolid.geometry.boundingSphere) { 
-            meshSolid.geometry.computeBoundingSphere(); 
-            meshSolid.geometry.computeBoundingBox(); 
-        }
-        
-        const clipPlaneLocal = mainMeshGroup.userData.clipPlane; 
-        let clipPlane = null; 
-        if (clipPlaneLocal) clipPlane = clipPlaneLocal.clone();
-        
-        const isClipped = (v) => clipPlane && clipPlane.distanceToPoint(v) < 0;
-        const stats = { renderedLines: 0, totalLines: 0, renderedDots: 0, totalDots: 0 };
-        const progressConfig = { start: 10, end: 90 };
-        const progressState = { processed: 0, lastPercent: 0, total: 0 };
-        const getStatsSnapshot = () => ({
-            lines: stats.renderedLines,
-            totalLines: stats.totalLines,
-            dots: stats.renderedDots,
-            totalDots: stats.totalDots
-        });
-        const pushProgress = (percent, message) => {
-            if (!onProgress) return;
-            const clamped = Math.max(0, Math.min(100, percent));
-            progressState.lastPercent = Math.max(progressState.lastPercent, clamped);
-            onProgress(clamped, message, { stats: getStatsSnapshot() });
-        };
-        const updateStreamingProgress = (message) => {
-            if (!onProgress) return;
-            const ratio = progressState.total > 0 ? Math.min(1, progressState.processed / progressState.total) : 0;
-            const rawPercent = progressConfig.start + ratio * (progressConfig.end - progressConfig.start);
-            const rounded = Math.round(rawPercent);
-            const percent = Math.min(progressConfig.end, Math.max(progressState.lastPercent, rounded));
-            if (!message && percent === progressState.lastPercent) return;
-            progressState.lastPercent = Math.max(progressState.lastPercent, percent);
-            onProgress(percent, message, { stats: getStatsSnapshot() });
-        };
-        const tickProgress = (amount = 1, message) => {
-            if (amount > 0) progressState.processed += amount;
-            updateStreamingProgress(message);
-        };
-        const reportLineSegment = (lineStr) => {
-            if (onChunk) onChunk(lineStr, { type: 'line', final: false });
-        };
-        const reportDotSegment = (circleStr) => {
-            if (onChunk) onChunk(circleStr, { type: 'dot', final: false });
-        };
-        const countSplines = () => {
-            if (!splineGroups) return 0;
-            return splineGroups.reduce((acc, group) => acc + ((Array.isArray(group.splines)) ? group.splines.length : 0), 0);
-        };
-        const setTotals = () => {
-            const splineTotal = countSplines();
-            const edgeCount = Math.floor(meshWire.geometry.attributes.position.count / 2);
-            stats.totalLines = !isDots ? Math.max(0, splineTotal || edgeCount) : 0;
-            stats.totalDots = isDots ? meshWire.geometry.attributes.position.count : 0;
-            progressState.total = Math.max(1, stats.totalLines + stats.totalDots);
-        };
-        const markLineRendered = (message) => {
-            if (stats.totalLines === 0) return;
-            stats.renderedLines = Math.min(stats.renderedLines + 1, stats.totalLines);
-            tickProgress(1, message || 'Processing lines...');
-        };
-        const markDotRendered = (message) => {
-            if (stats.totalDots === 0) return;
-            stats.renderedDots = Math.min(stats.renderedDots + 1, stats.totalDots);
-            tickProgress(1, message || 'Processing dots...');
-        };
-        setTotals();
-
-        const checkSignal = () => { if (signal && signal.aborted) throw new Error('Cancelled'); };
-        let lastYield = performance.now(); const YIELD_MS = 30;
-
-        // --- GPU DEPTH CAPTURE ---
-        let gpuDepthData = null;
-        // Higher resolution for export stability
-        const depthResW = Math.max(2560, Math.floor(width * 4.0)), depthResH = Math.max(2560, Math.floor(height * 4.0));
+        // GPU Depth Capture (needed for checkerboard and hidden line styles)
         if (state.occlusionMethod === 'gpu' && isHiddenLine && meshSolid) {
             pushProgress(5, 'GPU: Capturing Depth Map (High Res)...');
             const depthTarget = new THREE.WebGLRenderTarget(depthResW, depthResH);
@@ -2085,6 +2180,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 side: THREE.DoubleSide,
                 clipping: true,
                 clippingPlanes: clipPlane ? [clipPlane] : [],
+                polygonOffset: true,
+                polygonOffsetFactor: 1.0,
+                polygonOffsetUnits: 1.0,
                 vertexShader: `
                     #include <clipping_planes_pars_vertex>
                     varying float vDepth; 
@@ -2114,114 +2212,154 @@ document.addEventListener('DOMContentLoaded', () => {
             const originalMat = meshSolid.material; meshSolid.material = depthMaterial;
             const originalBg = scene.background; scene.background = new THREE.Color(0xffffff);
             const originalVisible = meshWire.visible; meshWire.visible = false;
-            
             renderer.setRenderTarget(depthTarget);
             renderer.render(scene, camera);
-            
             const pixelBuffer = new Uint8Array(depthResW * depthResH * 4);
             renderer.readRenderTargetPixels(depthTarget, 0, 0, depthResW, depthResH, pixelBuffer);
             renderer.setRenderTarget(null);
-            
             gpuDepthData = new Float32Array(depthResW * depthResH);
             for (let i = 0; i < gpuDepthData.length; i++) {
                 const r = pixelBuffer[i * 4 + 0] / 255.0, g = pixelBuffer[i * 4 + 1] / 255.0, b = pixelBuffer[i * 4 + 2] / 255.0, a = pixelBuffer[i * 4 + 3] / 255.0;
                 gpuDepthData[i] = r * (1.0/16777216.0) + g * (1.0/65536.0) + b * (1.0/256.0) + a;
             }
-            
             meshSolid.material = originalMat; scene.background = originalBg; meshWire.visible = originalVisible;
             depthTarget.dispose(); depthMaterial.dispose();
             pushProgress(10, 'GPU: Depth Map Ready');
         }
 
-        function checkOcclusion(targetPoint, maxDist) {
-            if (!isHiddenLine || !meshSolid) return false;
+        if (state.style === 'checkerboard') {
+            if (onProgress) onProgress(10, 'Analyzing mesh quads...', { stats: { lines: 0, totalLines: 0, dots: 0, totalDots: 0 } });
+            
+            const index = meshSolid.geometry.index;
+            const pos = meshSolid.geometry.attributes.position;
+            const uvs = meshSolid.geometry.attributes.uv;
+            const wSegs = meshSolid.geometry.userData.wSegs || 10;
+            const hSegs = meshSolid.geometry.userData.hSegs || 10;
+            const geoType = state.geoType;
+            
+            const faces = [];
+            const isQuad = (geoType !== 'icosahedron' && geoType !== 'tetrahedron' && geoType !== 'octahedron' && geoType !== 'dodecahedron');
 
-            if (state.occlusionMethod === 'gpu' && gpuDepthData) {
-                _c1.copy(targetPoint).applyMatrix4(matView);
-                _vProj.copy(_c1).applyMatrix4(matProj);
-                const tx = (_vProj.x * 0.5 + 0.5), ty = (_vProj.y * 0.5 + 0.5);
-                if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return false;
-                
-                const fx = tx * (depthResW - 1);
-                const fy = ty * (depthResH - 1);
-                const ix = Math.floor(fx);
-                const iy = Math.floor(fy);
-                
-                let storedDepth;
-                const gridSize = state.gpuGridSize || 1;
-                
-                if (gridSize <= 1) {
-                    // Smooth Bilinear Interpolation
-                    const wx = fx - ix;
-                    const wy = fy - iy;
-                    const nx = Math.min(depthResW - 1, ix + 1);
-                    const ny = Math.min(depthResH - 1, iy + 1);
+            if (index && isQuad) {
+                for (let i = 0; i < index.count; i += 6) {
+                    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
                     
-                    const d00 = gpuDepthData[iy * depthResW + ix];
-                    const d10 = gpuDepthData[iy * depthResW + nx];
-                    const d01 = gpuDepthData[ny * depthResW + ix];
-                    const d11 = gpuDepthData[ny * depthResW + nx];
+                    const a = index.getX(i), b = index.getX(i+1), c = index.getX(i+2);
+                    const e = index.getX(i+4);
                     
-                    storedDepth = (d00 * (1 - wx) * (1 - wy) +
-                                   d10 * wx * (1 - wy) +
-                                   d01 * (1 - wx) * wy +
-                                   d11 * wx * wy) * camera.far;
-                } else {
-                    // Aggressive Neighborhood Min-Filter
-                    let minD = 1.0;
-                    const radius = Math.floor(gridSize / 2);
-                    for (let dy = -radius; dy <= radius; dy++) {
-                        for (let dx = -radius; dx <= radius; dx++) {
-                            const nx = Math.max(0, Math.min(depthResW - 1, ix + dx));
-                            const ny = Math.max(0, Math.min(depthResH - 1, iy + dy));
-                            const d = gpuDepthData[ny * depthResW + nx];
-                            if (d < minD) minD = d;
+                    const vA = new THREE.Vector3().fromBufferAttribute(pos, a).applyMatrix4(matWorld);
+                    const vB = new THREE.Vector3().fromBufferAttribute(pos, b).applyMatrix4(matWorld);
+                    const vC = new THREE.Vector3().fromBufferAttribute(pos, c).applyMatrix4(matWorld);
+                    const vE = new THREE.Vector3().fromBufferAttribute(pos, e).applyMatrix4(matWorld);
+                    
+                    const mid = new THREE.Vector3().add(vA).add(vB).add(vC).add(vE).divideScalar(4);
+                    const dist = camPos.distanceTo(mid);
+                    
+                    if (isClipped(mid)) continue;
+                    // Slightly more generous bias for checkerboard to avoid self-occlusion artifacts
+                    if (isHiddenLine && checkOcclusion(mid, dist)) continue;
+
+                    const pts = [vA, vB, vE, vC].map(v => {
+                        const vc = v.clone().applyMatrix4(matView);
+                        return project(vc);
+                    });
+
+                    // Checkerboard logic
+                    let row, col;
+                    const qIdx = i / 6;
+                    
+                    if (uvs) {
+                        const uvA = new THREE.Vector2().fromBufferAttribute(uvs, a);
+                        const uvB = new THREE.Vector2().fromBufferAttribute(uvs, b);
+                        const uvC = new THREE.Vector2().fromBufferAttribute(uvs, c);
+                        const uvE = new THREE.Vector2().fromBufferAttribute(uvs, e);
+                        const midUV = new THREE.Vector2().add(uvA).add(uvB).add(uvC).add(uvE).divideScalar(4);
+                        
+                        col = Math.floor(midUV.x * wSegs);
+                        row = Math.floor(midUV.y * hSegs);
+                    } else if (geoType === 'cube') {
+                        const ws = meshSolid.geometry.userData.wSegs;
+                        const hs = meshSolid.geometry.userData.hSegs;
+                        const ds = meshSolid.geometry.userData.dSegs;
+                        
+                        const faceSegments = [
+                            { w: ds, h: hs }, { w: ds, h: hs }, // Right, Left
+                            { w: ws, h: ds }, { w: ws, h: ds }, // Top, Bottom
+                            { w: ws, h: hs }, { w: ws, h: hs }  // Front, Back
+                        ];
+                        
+                        let accumulatedQuads = 0;
+                        let faceIdx = 0;
+                        for (let f = 0; f < 6; f++) {
+                            const count = faceSegments[f].w * faceSegments[f].h;
+                            if (qIdx < accumulatedQuads + count) {
+                                faceIdx = f;
+                                const localQIdx = qIdx - accumulatedQuads;
+                                row = Math.floor(localQIdx / faceSegments[f].w);
+                                col = localQIdx % faceSegments[f].w;
+                                break;
+                            }
+                            accumulatedQuads += count;
                         }
+                        row += faceIdx; 
+                    } else {
+                        row = Math.floor(qIdx / wSegs);
+                        col = qIdx % wSegs;
                     }
-                    storedDepth = minD * camera.far;
+                    
+                    let isWhite = (row + col) % 2 === 0;
+                    if (state.checkerboard.invert) isWhite = !isWhite;
+                    const color = isWhite ? state.checkerboard.col1 : state.checkerboard.col2;
+                    
+                    faces.push({ pts, z: dist, color });
                 }
-                
-                const currentDepth = -_c1.z;
-                // Add a small constant stability epsilon to the bias
-                const bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.0005;
-                return currentDepth > storedDepth + bias;
+            } else if (index) {
+                // Triangles only
+                for (let i = 0; i < index.count; i += 3) {
+                    const a = index.getX(i), b = index.getX(i+1), c = index.getX(i+2);
+                    const vA = new THREE.Vector3().fromBufferAttribute(pos, a).applyMatrix4(matWorld);
+                    const vB = new THREE.Vector3().fromBufferAttribute(pos, b).applyMatrix4(matWorld);
+                    const vC = new THREE.Vector3().fromBufferAttribute(pos, c).applyMatrix4(matWorld);
+                    const mid = new THREE.Vector3().add(vA).add(vB).add(vC).divideScalar(3);
+                    const dist = camPos.distanceTo(mid);
+                    if (isClipped(mid)) continue;
+                    if (isHiddenLine && checkOcclusion(mid, dist)) continue;
+
+                    const pts = [vA, vB, vC].map(v => project(v.clone().applyMatrix4(matView)));
+                    
+                    let row = 0, col = 0;
+                    if (uvs) {
+                        const uvA = new THREE.Vector2().fromBufferAttribute(uvs, a);
+                        const uvB = new THREE.Vector2().fromBufferAttribute(uvs, b);
+                        const uvC = new THREE.Vector2().fromBufferAttribute(uvs, c);
+                        const midUV = new THREE.Vector2().add(uvA).add(uvB).add(uvC).divideScalar(3);
+                        col = Math.floor(midUV.x * wSegs);
+                        row = Math.floor(midUV.y * hSegs);
+                    } else {
+                        col = (i / 3) % wSegs;
+                        row = Math.floor((i / 3) / wSegs);
+                    }
+                    
+                    let isWhite = (row + col) % 2 === 0;
+                    if (state.checkerboard.invert) isWhite = !isWhite;
+                    const color = isWhite ? state.checkerboard.col1 : state.checkerboard.col2;
+                    faces.push({ pts, z: dist, color });
+                }
             }
 
-            rayDir.subVectors(targetPoint, camPos).normalize();
-            
-            // Pull back slightly to avoid self-intersection
-            const origin = camPos;
-            
-            raycaster.set(origin, rayDir);
-            
-            // Apply bias and epsilon (only subtract if > 0 for performance)
-            const exportBias = state.hiddenSettings.bias * 0.1;
-            const epsilon = state.hiddenSettings.epsilon;
-            if (exportBias > 0 && epsilon > 0) {
-                raycaster.far = maxDist - epsilon - exportBias;
-            } else if (exportBias > 0) {
-                raycaster.far = maxDist - exportBias;
-            } else if (epsilon > 0) {
-                raycaster.far = maxDist - epsilon;
-            } else {
-                raycaster.far = maxDist;
-            }
-            
-            const hits = raycaster.intersectObject(meshSolid);
-            for (let i = 0; i < hits.length; i++) {
-                if (!isClipped(hits[i].point)) return true;
-            }
-            return false;
-        }
+            faces.sort((a, b) => b.z - a.z);
 
-        async function smartYield() { 
-            if (performance.now() - lastYield > YIELD_MS) { 
-                await new Promise(r => setTimeout(r, 0)); 
-                lastYield = performance.now(); 
-                checkSignal(); 
-                return true; 
-            } 
-            return false; 
+            let outputBuffer = '';
+            faces.forEach(f => {
+                let pathD = `M ${f.pts[0].x.toFixed(1)},${f.pts[0].y.toFixed(1)}`;
+                for (let j = 1; j < f.pts.length; j++) pathD += ` L ${f.pts[j].x.toFixed(1)},${f.pts[j].y.toFixed(1)}`;
+                pathD += ' Z';
+                // Add a tiny stroke of the same color to prevent gaps between quads
+                outputBuffer += `<path d="${pathD}" fill="${f.color}" stroke="${f.color}" stroke-width="0.3" stroke-linejoin="round"/>`;
+            });
+            
+            if (onProgress) onProgress(100, 'Done', { stats: { lines: 0, totalLines: 0, dots: faces.length, totalDots: faces.length } });
+            return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="background-color: ${bg}">${outputBuffer}</svg>`;
         }
 
         // --- DEPTH ANALYSIS (skip if no zDepth features are enabled for performance) ---
@@ -2382,10 +2520,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const _p2 = new THREE.Vector3();
         const _w1 = new THREE.Vector3();
         const _w2 = new THREE.Vector3();
-        const _c1 = new THREE.Vector3();
         const _c2 = new THREE.Vector3();
         const _mid = new THREE.Vector3();
-        const _vProj = new THREE.Vector3();
 
         if (splineGroups && !isDots) {
             const totalGroups = splineGroups.length;
