@@ -2070,11 +2070,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             rayDir.subVectors(targetPoint, camPos).normalize();
             raycaster.set(camPos, rayDir);
+            raycaster.near = 0.001; // Avoid self-intersection with very close faces
+
             const exportBias = state.hiddenSettings.bias * 0.1, epsilon = state.hiddenSettings.epsilon;
-            if (exportBias > 0 && epsilon > 0) raycaster.far = maxDist - epsilon - exportBias;
-            else if (exportBias > 0) raycaster.far = maxDist - exportBias;
-            else if (epsilon > 0) raycaster.far = maxDist - epsilon;
-            else raycaster.far = maxDist;
+            let farDist = maxDist;
+            if (exportBias > 0 && epsilon > 0) farDist = maxDist - epsilon - exportBias;
+            else if (exportBias > 0) farDist = maxDist - exportBias;
+            else if (epsilon > 0) farDist = maxDist - epsilon;
+            
+            raycaster.far = Math.max(0, farDist);
             const hits = raycaster.intersectObject(meshSolid);
             for (let i = 0; i < hits.length; i++) { if (!isClipped(hits[i].point)) return true; }
             return false;
@@ -2256,13 +2260,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dist = camPos.distanceTo(mid);
                     
                     if (isClipped(mid)) continue;
+
+                    // Near-plane culling: skip quads that are behind the camera or clip the near plane
+                    // to avoid projection artifacts (inverted/distorted SVG paths)
+                    const vA_cam = vA.clone().applyMatrix4(matView);
+                    const vB_cam = vB.clone().applyMatrix4(matView);
+                    const vC_cam = vC.clone().applyMatrix4(matView);
+                    const vE_cam = vE.clone().applyMatrix4(matView);
+                    if (vA_cam.z > -near || vB_cam.z > -near || vC_cam.z > -near || vE_cam.z > -near) continue;
+
                     // Slightly more generous bias for checkerboard to avoid self-occlusion artifacts
                     if (isHiddenLine && checkOcclusion(mid, dist)) continue;
 
-                    const pts = [vA, vB, vE, vC].map(v => {
-                        const vc = v.clone().applyMatrix4(matView);
-                        return project(vc);
-                    });
+                    const pts = [vA_cam, vB_cam, vE_cam, vC_cam].map(vc => project(vc));
 
                     // Checkerboard logic
                     let row, col;
@@ -2323,9 +2333,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     const mid = new THREE.Vector3().add(vA).add(vB).add(vC).divideScalar(3);
                     const dist = camPos.distanceTo(mid);
                     if (isClipped(mid)) continue;
+
+                    // Near-plane culling: skip triangles that are behind the camera or clip the near plane
+                    const vA_cam = vA.clone().applyMatrix4(matView);
+                    const vB_cam = vB.clone().applyMatrix4(matView);
+                    const vC_cam = vC.clone().applyMatrix4(matView);
+                    if (vA_cam.z > -near || vB_cam.z > -near || vC_cam.z > -near) continue;
+
                     if (isHiddenLine && checkOcclusion(mid, dist)) continue;
 
-                    const pts = [vA, vB, vC].map(v => project(v.clone().applyMatrix4(matView)));
+                    const pts = [vA_cam, vB_cam, vC_cam].map(vc => project(vc));
                     
                     let row = 0, col = 0;
                     if (uvs) {
