@@ -1183,10 +1183,18 @@ document.addEventListener('DOMContentLoaded', () => {
         syncInput('ht-light-rot-y', 'val-ht-light-rot-y', (v) => { state.matcapRotation.y = parseFloat(v); updateMaterialUniforms(); });
         document.getElementById('ht-invert').addEventListener('change', (e) => { saveHistory(); state.halftone.invert = e.target.checked; if(state.style === 'halftone') { if(state.svgPreview) disableSVGPreview(); updateGeometry(); } });
 
-        const bindCbCol = (id, key) => { const el = document.getElementById(id); if (el) { el.addEventListener('change', () => saveHistory()); el.addEventListener('input', (e) => { state.checkerboard[key] = e.target.value; if(state.svgPreview) disableSVGPreview(); }); } };
+        const bindCbCol = (id, key) => { const el = document.getElementById(id); if (el) { el.addEventListener('change', () => saveHistory()); el.addEventListener('input', (e) => { state.checkerboard[key] = e.target.value; if(state.style === 'checkerboard' && state.svgPreview) { state.svgPreview = false; enableSVGPreview(); } else if(state.svgPreview) { disableSVGPreview(); } }); } };
         bindCbCol('cb-col1', 'col1'); bindCbCol('cb-col2', 'col2');
-        document.getElementById('cb-invert').addEventListener('change', (e) => { saveHistory(); state.checkerboard.invert = e.target.checked; if(state.svgPreview) disableSVGPreview(); });
-
+        document.getElementById('cb-invert').addEventListener('change', (e) => { 
+            saveHistory(); state.checkerboard.invert = e.target.checked; 
+            if(state.style === 'checkerboard' && state.svgPreview) { state.svgPreview = false; enableSVGPreview(); }
+            else if(state.svgPreview) disableSVGPreview(); 
+        });
+        document.getElementById('cb-delete-hidden').addEventListener('change', (e) => { 
+            saveHistory(); state.checkerboard.deleteHidden = e.target.checked; 
+            if(state.style === 'checkerboard' && state.svgPreview) { state.svgPreview = false; enableSVGPreview(); }
+            else if(state.svgPreview) disableSVGPreview(); 
+        });
 
         const hlMethod = document.getElementById('hl-method');
         if (hlMethod) hlMethod.addEventListener('change', (e) => {
@@ -1407,6 +1415,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setVal('cb-col1', state.checkerboard.col1); setVal('cb-col2', state.checkerboard.col2);
         setCheck('cb-invert', state.checkerboard.invert);
+        setCheck('cb-delete-hidden', state.checkerboard.deleteHidden);
 
         let isSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
         if (state.geoType === 'grid' && state.geoParams[4]) isSpline = true;
@@ -2270,7 +2279,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (vA_cam.z > -near || vB_cam.z > -near || vC_cam.z > -near || vE_cam.z > -near) continue;
 
                     // Slightly more generous bias for checkerboard to avoid self-occlusion artifacts
-                    if (isHiddenLine && checkOcclusion(mid, dist)) continue;
+                    const isOccluded = isHiddenLine && checkOcclusion(mid, dist);
+                    if (isOccluded && state.checkerboard.deleteHidden) continue;
 
                     const pts = [vA_cam, vB_cam, vE_cam, vC_cam].map(vc => project(vc));
 
@@ -2321,7 +2331,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (state.checkerboard.invert) isWhite = !isWhite;
                     const color = isWhite ? state.checkerboard.col1 : state.checkerboard.col2;
                     
-                    faces.push({ pts, z: dist, color });
+                    faces.push({ pts, z: dist, color, isOccluded });
                 }
             } else if (index) {
                 // Triangles only
@@ -2340,7 +2350,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     const vC_cam = vC.clone().applyMatrix4(matView);
                     if (vA_cam.z > -near || vB_cam.z > -near || vC_cam.z > -near) continue;
 
-                    if (isHiddenLine && checkOcclusion(mid, dist)) continue;
+                    const isOccluded = isHiddenLine && checkOcclusion(mid, dist);
+                    if (isOccluded && state.checkerboard.deleteHidden) continue;
 
                     const pts = [vA_cam, vB_cam, vC_cam].map(vc => project(vc));
                     
@@ -2360,7 +2371,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     let isWhite = (row + col) % 2 === 0;
                     if (state.checkerboard.invert) isWhite = !isWhite;
                     const color = isWhite ? state.checkerboard.col1 : state.checkerboard.col2;
-                    faces.push({ pts, z: dist, color });
+                    faces.push({ pts, z: dist, color, isOccluded });
                 }
             }
 
