@@ -2394,8 +2394,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let minVal = Infinity, maxVal = -Infinity, safeRange = 1.0, minZ = 0, maxZ = 1, safeZRange = 1.0, gradDir = null;
         let opMinZ = 0, opMaxZ = 1, safeOpZRange = 1.0;
         const useZDepth = state.zDepth.color || state.zDepth.opacity || state.zDepth.dof;
+        const useDOF = state.zDepth.dof;
+        let opEval = null, sizeEval = null;
         
         if (useZDepth) {
+            if (useDOF) {
+                opEval = state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.opCurve) : (t) => evaluateLinear(t, state.dof.opCurve);
+                sizeEval = state.dof.smoothCurve ? createMonotoneInterpolator(state.dof.sizeCurve) : (t) => evaluateLinear(t, state.dof.sizeCurve);
+            }
             const pos = meshWire.geometry.attributes.position; 
             const vTemp = new THREE.Vector3(); 
             const step = Math.max(1, Math.floor(pos.count / 200));
