@@ -281,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         autoRotate: false,
         svgPreview: false,
         style: 'hidden-line', 
-        hiddenSettings: { bias: 0, epsilon: 0.01, splineRes: 4, inflate: 0, minLen: 0 },
+        hiddenSettings: { bias: 0, epsilon: 0.01, splineRes: 4, inflate: 0, minLen: 0, invert: false },
         occlusionMethod: 'gpu',
         gpuGridSize: 1,
         gpuDepthMap: null,
@@ -1013,6 +1013,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const polyContainer = document.getElementById('poly-type-container');
         const polyType = document.getElementById('poly-type');
         syncInput('hl-bias', 'val-hl-bias', (v) => { state.hiddenSettings.bias = parseFloat(v); updateGeometry(); });
+        document.getElementById('hl-invert').addEventListener('change', (e) => { saveHistory(); state.hiddenSettings.invert = e.target.checked; if(state.svgPreview) disableSVGPreview(); updateGeometry(); });
 
         const applyGeoDefaults = (type) => {
             const defs = geoDefaults[type] || geoDefaults.custom;
@@ -1442,6 +1443,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setVal('hl-inflate', state.hiddenSettings.inflate); setVal('val-hl-inflate', state.hiddenSettings.inflate);
         setVal('hl-min-len', state.hiddenSettings.minLen); setVal('val-hl-min-len', state.hiddenSettings.minLen);
+        setCheck('hl-invert', state.hiddenSettings.invert);
 
         setCheck('use-z-color', state.zDepth.color); setDisplay('z-color-controls', state.zDepth.color);
         setCheck('use-z-opacity', state.zDepth.opacity); setDisplay('z-opacity-controls', state.zDepth.opacity);
@@ -1777,8 +1779,14 @@ document.addEventListener('DOMContentLoaded', () => {
         let clipPlanes = [];
         if (state.clip.enabled) {
             const normal = new THREE.Vector3();
-            if (state.clip.axis === 'x') normal.set(-1, 0, 0); else if (state.clip.axis === 'y') normal.set(0, -1, 0); else normal.set(0, 0, -1);
-            clipPlanes.push(new THREE.Plane(normal, state.clip.pos));
+            let pos = state.clip.pos;
+            if (state.clip.axis === 'x') normal.set(-1, 0, 0);
+            else if (state.clip.axis === '-x') { normal.set(1, 0, 0); pos = -pos; }
+            else if (state.clip.axis === 'y') normal.set(0, -1, 0);
+            else if (state.clip.axis === '-y') { normal.set(0, 1, 0); pos = -pos; }
+            else if (state.clip.axis === 'z') normal.set(0, 0, -1);
+            else if (state.clip.axis === '-z') { normal.set(0, 0, 1); pos = -pos; }
+            clipPlanes.push(new THREE.Plane(normal, pos));
         }
 
         const style = state.style; let meshWire; let meshSolid;
@@ -2494,8 +2502,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const dStart = camPos.distanceTo(wStart);
             const dEnd = camPos.distanceTo(wEnd);
             
-            const visStart = !isClipped(wStart) && !checkOcclusion(wStart, dStart);
-            const visEnd = !isClipped(wEnd) && !checkOcclusion(wEnd, dEnd);
+            const visStart = !isClipped(wStart) && (checkOcclusion(wStart, dStart) === state.hiddenSettings.invert);
+            const visEnd = !isClipped(wEnd) && (checkOcclusion(wEnd, dEnd) === state.hiddenSettings.invert);
             
             if (visStart === visEnd) {
                 // If both are visible, we promote to collection
@@ -2516,7 +2524,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      const mid = pStart.clone().lerp(pEnd, 0.5);
                      const wMid = mid.clone().applyMatrix4(matWorld);
                      const dMid = camPos.distanceTo(wMid);
-                     const visMid = !isClipped(wMid) && !checkOcclusion(wMid, dMid);
+                     const visMid = !isClipped(wMid) && (checkOcclusion(wMid, dMid) === state.hiddenSettings.invert);
                      if (visMid) {
                          traceSegmentRecursive(pStart, mid, depth + 1, isSpline);
                          traceSegmentRecursive(mid, pEnd, depth + 1, isSpline);
@@ -2600,7 +2608,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             let visible = pt.inFrustum; 
                             if (!visible) { screenPoints.push({ visible: false }); continue; } 
                             if (isClipped(pt.vWorld)) visible = false; 
-                            else if (isHiddenLine && meshSolid && checkOcclusion(pt.vWorld, pt.dist)) visible = false; 
+                            else if (isHiddenLine && meshSolid) {
+                                const occluded = checkOcclusion(pt.vWorld, pt.dist);
+                                visible = (occluded === state.hiddenSettings.invert);
+                            }
                             screenPoints.push(visible ? { x: pt.p.x, y: pt.p.y, dist: pt.dist, vWorld: pt.vWorld, visible: true } : { visible: false }); 
                         }
                         
@@ -2663,8 +2674,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                  const endIdx = Math.min(j + STRIDE, processed.length - 1);
                                  const pStart = processed[j], pEnd = processed[endIdx];
 
-                                 if (pStart.vis === null) pStart.vis = isHiddenLine ? !checkOcclusion(pStart.w, pStart.dist) : true;
-                                 if (pEnd.vis === null) pEnd.vis = isHiddenLine ? !checkOcclusion(pEnd.w, pEnd.dist) : true;
+                                 if (pStart.vis === null) pStart.vis = isHiddenLine ? (checkOcclusion(pStart.w, pStart.dist) === state.hiddenSettings.invert) : true;
+                                 if (pEnd.vis === null) pEnd.vis = isHiddenLine ? (checkOcclusion(pEnd.w, pEnd.dist) === state.hiddenSettings.invert) : true;
 
                                  if (pStart.vis && pEnd.vis) {
                                      // Entire block is visible
@@ -2678,18 +2689,18 @@ document.addEventListener('DOMContentLoaded', () => {
                                      // Block might be hidden or tunneling
                                      const midIdx = Math.floor((j + endIdx) / 2);
                                      const pMid = processed[midIdx];
-                                     if (pMid.vis === null) pMid.vis = isHiddenLine ? !checkOcclusion(pMid.w, pMid.dist) : true;
+                                     if (pMid.vis === null) pMid.vis = isHiddenLine ? (checkOcclusion(pMid.w, pMid.dist) === state.hiddenSettings.invert) : true;
                                      
                                      if (pMid.vis) { // Tunneling detected, re-process with smaller steps
                                          for (let k = j; k < endIdx; k++) {
                                              const s1 = processed[k], s2 = processed[k+1];
-                                             if (s1.vis === null) s1.vis = isHiddenLine ? !checkOcclusion(s1.w, s1.dist) : true;
-                                             if (s2.vis === null) s2.vis = isHiddenLine ? !checkOcclusion(s2.w, s2.dist) : true;
+                                             if (s1.vis === null) s1.vis = isHiddenLine ? (checkOcclusion(s1.w, s1.dist) === state.hiddenSettings.invert) : true;
+                                             if (s2.vis === null) s2.vis = isHiddenLine ? (checkOcclusion(s2.w, s2.dist) === state.hiddenSettings.invert) : true;
                                              if (s1.vis || s2.vis) {
                                                  const wM = _mid.copy(s1.w).lerp(s2.w, 0.5);
                                                  const dM = (s1.dist + s2.dist) / 2;
                                                  if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true);
-                                                 else if (!checkOcclusion(wM, dM)) collectLine(s1.scr, s2.scr, dM, wM, true);
+                                                 else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true);
                                              }
                                          }
                                      }
@@ -2697,13 +2708,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                      // Mixed visibility - transition zone
                                      for (let k = j; k < endIdx; k++) {
                                          const s1 = processed[k], s2 = processed[k+1];
-                                         if (s1.vis === null) s1.vis = isHiddenLine ? !checkOcclusion(s1.w, s1.dist) : true;
-                                         if (s2.vis === null) s2.vis = isHiddenLine ? !checkOcclusion(s2.w, s2.dist) : true;
+                                         if (s1.vis === null) s1.vis = isHiddenLine ? (checkOcclusion(s1.w, s1.dist) === state.hiddenSettings.invert) : true;
+                                         if (s2.vis === null) s2.vis = isHiddenLine ? (checkOcclusion(s2.w, s2.dist) === state.hiddenSettings.invert) : true;
                                          if (s1.vis || s2.vis) {
                                              const wM = _mid.copy(s1.w).lerp(s2.w, 0.5);
                                              const dM = (s1.dist + s2.dist) / 2;
                                              if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true);
-                                             else if (!checkOcclusion(wM, dM)) collectLine(s1.scr, s2.scr, dM, wM, true);
+                                             else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true);
                                          }
                                      }
                                  }
@@ -2762,7 +2773,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   // Early viewport check BEFORE expensive occlusion check
                   if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) continue;
                   const dist = camPos.distanceTo(v1);
-                  if (!checkOcclusion(v1, dist)) {
+                  if (checkOcclusion(v1, dist) === state.hiddenSettings.invert) {
                       const { col, op, scale } = getStyle(dist, v1);
                       const r = (state.dotSize * scale) / 2;
                       if(op > 0.001 && r > 0.1) {
