@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F'lines</title>
+    <title>Flines</title>
     <link rel="stylesheet" href="style.css">
     <!-- Three.js Core -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -45,7 +45,10 @@
         <!-- Left Sidebar: Geometry & Modifiers -->
         <aside class="sidebar left">
             <div class="header">
-                <h2>F'lines <span class="badge">beta</span></h2>
+                <div class="header-brand">
+                    <svg class="header-logo" viewBox="0 0 680.95 680.91" xmlns="http://www.w3.org/2000/svg"><path d="m129.5 551.4 551.41-551.4h-340.45c-188.03 0-340.46 152.43-340.46 340.45 0 188.03 152.43 340.45 340.45 340.45h340.45s-241.84-241.84-241.84-241.84l225.98-216.12c47.19-45.13-20.94-122.46-71.12-74.06l-442.34 426.52z" fill="#1d1d1b"/></svg>
+                    <h2>Flines <span class="badge">beta</span></h2>
+                </div>
                 <div class="header-actions">
                     <button id="btn-save" class="btn-icon" title="Save Settings (.flines)">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1018,7 +1021,7 @@
                 </div>
 
                 <!-- Halftone Settings -->
-                <div id="halftone-settings" style="display:none; margin-bottom:15px; padding:10px; background:#222; border-radius:4px;">
+                <div id="halftone-settings" style="display:none; margin-bottom:15px; padding:10px; border-radius:4px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                         <label style="color:#aaa; font-size:11px; margin:0;">Halftone Settings</label>
                     </div>
@@ -1071,7 +1074,7 @@
                 </div>
 
                 <!-- Checkerboard Settings -->
-                <div id="checkerboard-settings" style="display:none; margin-bottom:15px; padding:10px; background:#222; border-radius:4px;">
+                <div id="checkerboard-settings" style="display:none; margin-bottom:15px; padding:10px; border-radius:4px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                         <label style="color:#aaa; font-size:11px; margin:0;">Checkerboard Settings</label>
                     </div>
@@ -1101,7 +1104,7 @@
                 </div>
 
                 <!-- Hidden Line Tweaks -->
-                <div id="hidden-line-settings" style="display:block; margin-bottom:15px; padding:10px; background:#222; border-radius:4px;">
+                <div id="hidden-line-settings" style="display:block; margin-bottom:15px; padding:10px; border-radius:4px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                         <label style="color:#aaa; font-size:11px; margin:0;">Settings</label>
                         <button id="btn-reset-hl" class="btn-icon" style="font-size:12px;" title="Reset Settings">↺</button>
