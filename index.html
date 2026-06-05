@@ -200,6 +200,7 @@
                                 <option value="simplex">Simplex Noise</option>
                                 <option value="perlin">Perlin Noise</option>
                                 <option value="worley">Worley Noise</option>
+                                <option value="voronoi">Voronoi Noise</option>
                                 <option value="value">Value Noise</option>
                                 <option value="turbulence">Turbulence Noise</option>
                                 <option value="ridged">Ridged Multifractal Noise</option>
@@ -330,6 +331,7 @@
                                             <option value="simplex">Simplex Noise</option>
                                             <option value="perlin">Perlin Noise</option>
                                             <option value="worley">Worley Noise</option>
+                                            <option value="voronoi">Voronoi Noise</option>
                                             <option value="value">Value Noise</option>
                                             <option value="turbulence">Turbulence Noise</option>
                                             <option value="ridged">Ridged Multifractal Noise</option>
@@ -354,6 +356,30 @@
                                         <div class="range-row">
                                             <input type="range" id="noise-seed" min="1" max="1000" step="1" value="1">
                                             <input type="number" id="val-noise-seed" class="val-input" value="1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Smooth / Relax -->
+                            <div class="control-group" data-type="smooth">
+                                <div class="control-header">
+                                    <input type="checkbox" id="use-smooth">
+                                    <label for="use-smooth">Smooth / Relax</label>
+                                </div>
+                                <div class="sub-controls" id="smooth-controls" style="display:none;">
+                                    <div class="control">
+                                        <label>Strength</label>
+                                        <div class="range-row">
+                                            <input type="range" id="smooth-str" min="0" max="1" step="0.01" value="0.5">
+                                            <input type="number" id="val-smooth-str" class="val-input" value="0.5">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Iterations</label>
+                                        <div class="range-row">
+                                            <input type="range" id="smooth-iters" min="1" max="20" step="1" value="3">
+                                            <input type="number" id="val-smooth-iters" class="val-input" value="3">
                                         </div>
                                     </div>
                                 </div>
@@ -828,6 +854,32 @@
                             </div>
                         </div>
 
+                        <!-- Size Scaling -->
+                        <div class="control-group" data-type="z-size">
+                            <div class="control-header">
+                                <input type="checkbox" id="use-z-size">
+                                <label for="use-z-size">Size Scaling (Thickness/Radius)</label>
+                            </div>
+                            <div class="sub-controls" id="z-size-controls" style="display:none;">
+                                <div style="padding: 10px; background: #222; border-radius: 6px;">
+                                    <div class="control">
+                                        <label>Near Size (px)</label>
+                                        <div class="range-row">
+                                            <input type="range" id="z-size-near" min="0.1" max="20" step="0.1" value="5">
+                                            <input type="number" id="val-z-size-near" class="val-input" value="5">
+                                        </div>
+                                    </div>
+                                    <div class="control">
+                                        <label>Far Size (px)</label>
+                                        <div class="range-row">
+                                            <input type="range" id="z-size-far" min="0.1" max="20" step="0.1" value="1">
+                                            <input type="number" id="val-z-size-far" class="val-input" value="1">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Depth of Field -->
                         <div class="control-group" data-type="z-dof">
                             <div class="control-header">
@@ -876,7 +928,7 @@
                     </div>
                 </div>
             </div>
-            <div class="sidebar-footer"><a href="https://fim.design" target="_blank" style="color: inherit; text-decoration: none;">fim.design</a> <span class="badge" id="version-badge" style="cursor:pointer;">v0.109</span></div>
+            <div class="sidebar-footer"><a href="https://fim.design" target="_blank" style="color: inherit; text-decoration: none;">fim.design</a> <span class="badge" id="version-badge" style="cursor:pointer;">v0.110</span></div>
         </aside>
 
         <!-- Main Viewport -->
@@ -999,9 +1051,6 @@
             <!-- Unified Style & Export -->
             <div class="section highlight">
                 <h3>STYLE & EXPORT</h3>
-                <div class="info-box" id="info-export-match">
-                    Export matches the preview exactly.
-                </div>
 
                 <button id="btn-preview-svg" class="btn-primary" style="margin-bottom:15px; background:#444;">
                     PREVIEW SVG
@@ -1107,7 +1156,6 @@
                 <div id="hidden-line-settings" style="display:block; margin-bottom:15px; padding:10px; border-radius:4px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                         <label style="color:#aaa; font-size:11px; margin:0;">Settings</label>
-                        <button id="btn-reset-hl" class="btn-icon" style="font-size:12px;" title="Reset Settings">↺</button>
                     </div>
                     
                     <div class="control" id="ctrl-hl-epsilon">
@@ -1115,22 +1163,6 @@
                         <div class="range-row">
                             <input type="range" id="hl-epsilon" min="0" max="0.1" step="0.001" value="0.01">
                             <input type="number" id="val-hl-epsilon" class="val-input" value="0.01">
-                        </div>
-                    </div>
-
-                    <div class="control" id="ctrl-hl-bias">
-                        <label>Depth Bias</label>
-                        <div class="range-row">
-                            <input type="range" id="hl-bias" min="0" max="3" step="0.1" value="1.0">
-                            <input type="number" id="val-hl-bias" class="val-input" value="1.0">
-                        </div> 
-                    </div>
-                    
-                    <div class="control">
-                        <label>Occluder Inflation</label>
-                        <div class="range-row">
-                            <input type="range" id="hl-inflate" min="-0.2" max="0.2" step="0.001" value="0">
-                            <input type="number" id="val-hl-inflate" class="val-input" value="0">
                         </div>
                     </div>
 
@@ -1142,58 +1174,74 @@
                         </div>
                     </div>
 
-                    <div class="control" id="ctrl-hl-spline-res">
-                        <label>Spline Subdiv</label>
-                        <div class="range-row">
-                            <input type="range" id="hl-spline-res" min="1" max="16" step="1">
-                            <input type="number" id="val-hl-spline-res" class="val-input" value="16">
-                        </div>
-                    </div>
-                    
-                    <div class="control" id="ctrl-solid-subdiv" style="display:none;">
-                        <label>Occluder Subdiv</label>
-                        <div class="range-row">
-                            <input type="range" id="solid-subdiv" min="1" max="4" step="0.5" value="1">
-                            <input type="number" id="val-solid-subdiv" class="val-input" value="2">
-                        </div>
-                    </div>
-
-                    <div class="control">
+                    <div class="control" id="ctrl-hl-invert">
                          <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
                             <input type="checkbox" id="hl-invert">
                             Invert (Show Hidden Lines)
                         </label>
                     </div>
-                    <div class="control" id="ctrl-hl-method">
-                        <label>Occlusion Method</label>
-                        <select id="hl-method">
-                            <option value="gpu">Fastest (GPU)</option>
-                            <option value="precise">Precise (CPU, Legacy)</option>
-                            <option value="precise-fast">Medium (CPU, Legacy)</option>
-                            <option value="simple">Simple (CPU, Legacy)</option>
-                        </select>
-                    </div>
 
-                    <div class="control" id="ctrl-gpu-grid">
-                        <label>GPU Grid Size</label>
-                        <select id="gpu-grid">
-                            <option value="1" selected>1x1</option>
-                            <option value="2">2x2</option>
-                            <option value="3">3x3</option>
-                            <option value="4">4x4</option>
-                            <option value="5">5x5</option>
-                            <option value="7">7x7</option>
-                            <option value="10">10x10</option>
-                        </select>
-                    </div>
+                    <!-- Advanced Settings -->
+                    <div id="ctrl-hl-advanced" class="section collapsed" style="margin-top:10px; border-bottom:none; padding-bottom:0; background:transparent; margin-bottom:0;">
+                        <h3 id="hl-advanced-header" class="collapsible-header" style="color:#888; font-size:10px; margin-bottom:5px;">
+                            <span><span class="arrow-icon">▼</span> ADVANCED</span>
+                        </h3>
+                        <div id="hl-advanced-content">
+                            <div class="control" id="ctrl-hl-bias">
+                                <label>Depth Bias</label>
+                                <div class="range-row">
+                                    <input type="range" id="hl-bias" min="0" max="3" step="0.1" value="1.0">
+                                    <input type="number" id="val-hl-bias" class="val-input" value="1.0">
+                                </div> 
+                            </div>
+                            
+                            <div class="control">
+                                <label>Occluder Inflation</label>
+                                <div class="range-row">
+                                    <input type="range" id="hl-inflate" min="-0.2" max="0.2" step="0.001" value="0">
+                                    <input type="number" id="val-hl-inflate" class="val-input" value="0">
+                                </div>
+                            </div>
 
+                            <div class="control" id="ctrl-hl-spline-res">
+                                <label>Spline Subdiv</label>
+                                <div class="range-row">
+                                    <input type="range" id="hl-spline-res" min="1" max="16" step="1">
+                                    <input type="number" id="val-hl-spline-res" class="val-input" value="16">
+                                </div>
+                            </div>
+                            
+                            <div class="control" id="ctrl-solid-subdiv" style="display:none;">
+                                <label>Occluder Subdiv</label>
+                                <div class="range-row">
+                                    <input type="range" id="solid-subdiv" min="1" max="4" step="0.5" value="1">
+                                    <input type="number" id="val-solid-subdiv" class="val-input" value="2">
+                                </div>
+                            </div>
 
+                            <div class="control" id="ctrl-hl-method">
+                                <label>Occlusion Method</label>
+                                <select id="hl-method">
+                                    <option value="gpu">Fastest (GPU)</option>
+                                    <option value="precise">Precise (CPU, Legacy)</option>
+                                    <option value="precise-fast">Medium (CPU, Legacy)</option>
+                                    <option value="simple">Simple (CPU, Legacy)</option>
+                                </select>
+                            </div>
 
-                    <div class="control" id="ctrl-hl-proper-order">
-                         <label style="display:flex; align-items:center; gap:8px; font-size:12px;">
-                            <input type="checkbox" id="hl-proper-order">
-                            Proper Order (Z)
-                        </label>
+                            <div class="control" id="ctrl-gpu-grid">
+                                <label>GPU Grid Size</label>
+                                <select id="gpu-grid">
+                                    <option value="1" selected>1x1</option>
+                                    <option value="2">2x2</option>
+                                    <option value="3">3x3</option>
+                                    <option value="4">4x4</option>
+                                    <option value="5">5x5</option>
+                                    <option value="7">7x7</option>
+                                    <option value="10">10x10</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
