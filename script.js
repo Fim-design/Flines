@@ -124,6 +124,31 @@ const WorleyNoise = (function() {
     return WorleyNoise;
 })();
 
+const VoronoiNoise = (function() {
+    function VoronoiNoise(random) {
+        this.random = random;
+        this.numFeatures = 200;
+        this.features = [];
+        this.values = [];
+        for (let i = 0; i < this.numFeatures; i++) {
+            this.features.push(new THREE.Vector3(this.random() * 8 - 4, this.random() * 8 - 4, this.random() * 8 - 4));
+            this.values.push(this.random() * 2 - 1);
+        }
+    }
+    VoronoiNoise.prototype = {
+        noise3D: function(x, y, z) {
+            let minDst = Infinity; let closestVal = 0;
+            const p = new THREE.Vector3(x, y, z);
+            for (let i = 0; i < this.numFeatures; i++) {
+                const d = p.distanceToSquared(this.features[i]);
+                if (d < minDst) { minDst = d; closestVal = this.values[i]; }
+            }
+            return closestVal;
+        }
+    };
+    return VoronoiNoise;
+})();
+
 const ValueNoise = (function() {
     function ValueNoise(random) {
         this.p = new Uint8Array(512);
@@ -275,7 +300,8 @@ document.addEventListener('DOMContentLoaded', () => {
         swirl: { enabled: false, str: 0.5, axis: 'y' },
         quantize: { enabled: false, steps: 10, axis: 'all' },
         zigzag: { enabled: false, amp: 0.2, freq: 5.0, axis: 'y' },
-        deformationOrder: ['noise', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew', 'pinch', 'stretch', 'swirl', 'quantize', 'zigzag'],
+        smooth: { enabled: false, str: 0.5, iters: 3 },
+        deformationOrder: ['noise', 'smooth', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew', 'pinch', 'stretch', 'swirl', 'quantize', 'zigzag'],
         reorderMode: false,
         cam: { x: 4, y: 3, z: 5, rotX: 0, rotY: 0, fov: 45, target: {x: 0, y: 0, z: 0} },
         autoRotate: false,
@@ -286,9 +312,10 @@ document.addEventListener('DOMContentLoaded', () => {
         gpuGridSize: 1,
         gpuDepthMap: null,
         legacyHiddenLine: false,
-        properOrder: false,
-        zDepth: { color: false, opacity: false, dof: false },
-        halftone: { grid: 10, size: 8, angle: 45, invert: false },
+        properOrder: true,
+        zDepth: { color: false, opacity: false, dof: false, size: false },
+        zSize: { near: 5, far: 1 },
+        halftone: { grid: 10, size: 8, angle: 45, invert: true },
         checkerboard: { col1: '#ffffff', col2: '#000000', invert: false },
         matcapRotation: { x: 0, y: 0 },
         gradMode: 'camera', 
@@ -355,6 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 opMinZ: { value: 0.0 }, opMaxZ: { value: 10.0 },
                 dofMinZ: { value: 0.0 }, dofMaxZ: { value: 10.0 },
                 useColor: { value: 0 }, useOpacity: { value: 0 }, useDOF: { value: 0 },
+                useZSize: { value: 0 }, zSizeNear: { value: 5.0 }, zSizeFar: { value: 1.0 },
                 cameraPos: { value: new THREE.Vector3() },
                 pointSize: { value: (state.dotSize || 6.0) * (window.devicePixelRatio || 1.0) },
                 dofFocus: { value: 0.5 }, dofIntensity: { value: 5.0 }, dofIgnoreNear: { value: 0 }, dofOpTexture: { value: dummyTex },
@@ -368,6 +396,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 uniform vec3 cameraPos; 
                 uniform int gradMode;
                 uniform vec3 gradDir;
+                uniform int useZSize;
+                uniform float zSizeNear;
+                uniform float zSizeFar;
                 varying float vDist;
                 varying float vProj;
                 void main() { 
@@ -382,7 +413,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     vec4 mvPosition = viewMatrix * worldPosition; 
                     #include <clipping_planes_vertex>
                     gl_Position = projectionMatrix * mvPosition; 
-                    gl_PointSize = pointSize * (5.0 / -mvPosition.z); 
+                    if (useZSize == 1) {
+                        float t = clamp((vDist - 0.0) / 20.0, 0.0, 1.0);
+                        gl_PointSize = mix(zSizeNear, zSizeFar, t) * (5.0 / -mvPosition.z);
+                    } else {
+                        gl_PointSize = pointSize * (5.0 / -mvPosition.z); 
+                    }
                 }`,
             fragmentShader: `
                 #include <clipping_planes_pars_fragment>
@@ -466,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         if (state.deformationOrder) {
-            const allDeformations = ['noise', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew', 'pinch', 'stretch', 'swirl', 'quantize', 'zigzag'];
+            const allDeformations = ['noise', 'smooth', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew', 'pinch', 'stretch', 'swirl', 'quantize', 'zigzag'];
             const missing = allDeformations.filter(d => !state.deformationOrder.includes(d));
             state.deformationOrder.push(...missing);
         }
@@ -476,6 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.occlusionMethod = state.legacyHiddenLine ? 'simple' : 'precise';
         }
         if (state.gpuGridSize === undefined) state.gpuGridSize = 1;
+        state.properOrder = true;
         updateUIFromState(); updateGeometry(); updateMaterialUniforms();
         camera.position.set(state.cam.x, state.cam.y, state.cam.z); 
         if (state.cam.target) {
@@ -578,6 +615,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!badge || !modal || !content || !closeBtn) return;
 
         const changelogText = `█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█
+█   VERSION 0.110   █
+█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
+│
+└── [FIX] UI Improvements
+
+
+█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█      
 █   VERSION 0.109   █
 █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 │
@@ -854,7 +898,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function initScene() {
-        scene = new THREE.Scene(); scene.background = new THREE.Color(0x111111);
+        scene = new THREE.Scene(); 
+        scene.background = new THREE.Color(0x111111);
+        scene.fog = new THREE.FogExp2(0x111111, 0.03);
+        const gridHelper = new THREE.GridHelper(100, 100, 0x333333, 0x333333);
+        gridHelper.position.y = -5;
+        gridHelper.material.opacity = 0.5;
+        gridHelper.material.transparent = true;
+        scene.add(gridHelper);
         const aspect = container.clientWidth / container.clientHeight;
         camera = new THREE.PerspectiveCamera(state.cam.fov, aspect, 0.1, 1000); camera.position.set(state.cam.x, state.cam.y, state.cam.z);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setSize(container.clientWidth, container.clientHeight); renderer.setPixelRatio(window.devicePixelRatio); renderer.localClippingEnabled = true; container.appendChild(renderer.domElement);
@@ -947,6 +998,9 @@ document.addEventListener('DOMContentLoaded', () => {
             mat.uniforms.useColor.value = state.zDepth.color ? 1 : 0; 
             mat.uniforms.useOpacity.value = state.zDepth.opacity ? 1 : 0; 
             mat.uniforms.useDOF.value = state.zDepth.dof ? 1 : 0;
+            mat.uniforms.useZSize.value = state.zDepth.size ? 1 : 0;
+            mat.uniforms.zSizeNear.value = state.zSize.near;
+            mat.uniforms.zSizeFar.value = state.zSize.far;
             
             const activeColor = (state.svgPreview && !state.zDepth.color) ? '#f1c40f' : state.baseColor;
             mat.uniforms.color.value.set(activeColor); 
@@ -1066,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('obj-input').addEventListener('change', (e) => { saveHistory(); const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = (ev) => { const loader = new THREE.OBJLoader(); const obj = loader.parse(ev.target.result); const geos = []; obj.traverse(c => { if(c.isMesh) geos.push(c.geometry); }); if(geos.length) { originalGeometry = geos.length === 1 ? geos[0] : THREE.BufferGeometryUtils.mergeBufferGeometries(geos); originalGeometry = THREE.BufferGeometryUtils.mergeVertices(originalGeometry); originalGeometry.center(); originalGeometry.computeBoundingSphere(); const s = 3.0 / originalGeometry.boundingSphere.radius; originalGeometry.scale(s,s,s); updateGeometry(); } }; reader.readAsText(file); });
 
         const bindCheck = (id, key) => { const el = document.getElementById(id); const sub = document.getElementById(key + '-controls'); el.addEventListener('change', () => { saveHistory(); state[key].enabled = el.checked; if(sub) sub.style.display = el.checked ? 'block' : 'none'; updateGeometry(); }); };
-        ['noise','twist','wave','bulge','bend','taper','ripple','spherify','skew','pinch','stretch','swirl','quantize','zigzag'].forEach(k => bindCheck('use-'+k, k));
+        ['noise','smooth','twist','wave','bulge','bend','taper','ripple','spherify','skew','pinch','stretch','swirl','quantize','zigzag'].forEach(k => bindCheck('use-'+k, k));
 
         syncInput('noise-amp', 'val-noise-amp', (v) => { state.noise.amp = parseFloat(v); updateGeometry(); });
         syncInput('noise-freq', 'val-noise-freq', (v) => { state.noise.freq = parseFloat(v); updateGeometry(); });
@@ -1087,6 +1141,8 @@ document.addEventListener('DOMContentLoaded', () => {
         syncInput('quantize-steps', 'val-quantize-steps', (v) => { state.quantize.steps = parseInt(v); updateGeometry(); });
         syncInput('zigzag-amp', 'val-zigzag-amp', (v) => { state.zigzag.amp = parseFloat(v); updateGeometry(); });
         syncInput('zigzag-freq', 'val-zigzag-freq', (v) => { state.zigzag.freq = parseFloat(v); updateGeometry(); });
+        syncInput('smooth-str', 'val-smooth-str', (v) => { state.smooth.str = parseFloat(v); updateGeometry(); });
+        syncInput('smooth-iters', 'val-smooth-iters', (v) => { state.smooth.iters = parseInt(v, 10); updateGeometry(); });
 
         syncInput('landscape-seed', 'val-landscape-seed', (v) => { state.landscape.seed = parseInt(v); updateGeometry(); });
         document.getElementById('landscape-noise-type').addEventListener('change', (e) => { saveHistory(); state.landscape.noiseType = e.target.value; updateGeometry(); });
@@ -1212,17 +1268,18 @@ document.addEventListener('DOMContentLoaded', () => {
             state.gpuGridSize = parseInt(e.target.value);
             if(state.svgPreview) disableSVGPreview();
         });
-        
-        const hlProperOrder = document.getElementById('hl-proper-order'); if (hlProperOrder) hlProperOrder.addEventListener('change', (e) => { saveHistory(); state.properOrder = e.target.checked; if(state.svgPreview) disableSVGPreview(); });
 
         const setupCollapsible = (headerId, contentId) => {
             const header = document.getElementById(headerId); const content = document.getElementById(contentId);
             if (header && content) { header.addEventListener('click', (e) => { if (e.target.closest('button')) return; const section = header.closest('.section'); section.classList.toggle('collapsed'); content.style.display = section.classList.contains('collapsed') ? 'none' : 'block'; saveHistory(); }); const section = header.closest('.section'); content.style.display = section.classList.contains('collapsed') ? 'none' : 'block'; }
         };
-        setupCollapsible('deformation-header', 'deformation-content'); setupCollapsible('z-depth-header', 'z-depth-content'); setupCollapsible('transform-header', 'transform-content'); setupCollapsible('camera-header', 'camera-content'); setupCollapsible('geometry-header', 'geometry-content');
+        setupCollapsible('deformation-header', 'deformation-content'); setupCollapsible('z-depth-header', 'z-depth-content'); setupCollapsible('transform-header', 'transform-content'); setupCollapsible('camera-header', 'camera-content'); setupCollapsible('geometry-header', 'geometry-content'); setupCollapsible('hl-advanced-header', 'hl-advanced-content');
 
         const bindZToggle = (id, key) => { const el = document.getElementById(id); if (el) el.addEventListener('change', (e) => { saveHistory(); state.zDepth[key] = e.target.checked; updateUIFromState(); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); }); };
-        bindZToggle('use-z-color', 'color'); bindZToggle('use-z-opacity', 'opacity'); bindZToggle('use-z-dof', 'dof');
+        bindZToggle('use-z-color', 'color'); bindZToggle('use-z-opacity', 'opacity'); bindZToggle('use-z-dof', 'dof'); bindZToggle('use-z-size', 'size');
+        
+        syncInput('z-size-near', 'val-z-size-near', (v) => { state.zSize.near = parseFloat(v); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
+        syncInput('z-size-far', 'val-z-size-far', (v) => { state.zSize.far = parseFloat(v); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
         syncInput('dof-focus', 'val-dof-focus', (v) => { state.dof.focus = parseFloat(v); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
         syncInput('dof-intensity', 'val-dof-intensity', (v) => { state.dof.intensity = parseFloat(v); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
         syncInput('dof-aperture', 'val-dof-aperture', (v) => { state.dof.aperture = parseFloat(v); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
@@ -1260,27 +1317,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('btn-reset-transform').addEventListener('click', (e) => { e.stopPropagation(); saveHistory(); state.objRot = { x: 0, y: 0, z: 0 }; document.getElementById('obj-rot-x').value = 0; document.getElementById('obj-rot-y').value = 0; document.getElementById('obj-rot-z').value = 0; updateGeometry(); });
         document.getElementById('btn-reset-cam').addEventListener('click', (e) => { e.stopPropagation(); saveHistory(); state.cam = { x: 4, y: 3, z: 5, rotX: 0, rotY: 0, fov: 45, target: {x:0, y:0, z:0} }; document.getElementById('cam-x').value = 4; document.getElementById('cam-y').value = 3; document.getElementById('cam-z').value = 5; document.getElementById('cam-fov').value = 45; document.getElementById('val-cam-fov').value = 45; document.getElementById('cam-rot-x').value = 0; document.getElementById('cam-rot-y').value = 0; camera.position.set(4, 3, 5); controls.target.set(0,0,0); camera.fov = 45; camera.updateProjectionMatrix(); controls.update(); if(state.svgPreview) disableSVGPreview(); });
-        document.getElementById('btn-reset-hl').addEventListener('click', (e) => {
-            e.stopPropagation();
-            saveHistory();
-            state.hiddenSettings = { bias: 1.0, epsilon: 0.1, splineRes: 16, inflate: 0, minLen: 0 };
-            state.occlusionMethod = 'gpu';
-            state.legacyHiddenLine = false;
-            state.properOrder = false;
-            document.getElementById('hl-epsilon').value = 0.1;
-            document.getElementById('val-hl-epsilon').value = 0.1;
-            document.getElementById('hl-spline-res').value = 16;
-            document.getElementById('val-hl-spline-res').value = 16;
-            document.getElementById('hl-method').value = 'gpu';
-            document.getElementById('hl-proper-order').checked = false;
-            document.getElementById('hl-inflate').value = 0;
-            document.getElementById('val-hl-inflate').value = 0;
-            document.getElementById('hl-min-len').value = 0.5;
-            document.getElementById('val-hl-min-len').value = 0.5;
-            if (mainMeshGroup && mainMeshGroup.userData.solid) { mainMeshGroup.userData.solid.material.polygonOffsetFactor = 1.0; mainMeshGroup.userData.solid.material.polygonOffsetUnits = 1.0; }
-            if(state.svgPreview) disableSVGPreview();
-            updateUIFromState();
-        });
 
         syncInput('style-dot-size', 'val-style-dot-size', (v) => { const val = parseFloat(v); state.dotSize = val; state.strokeWidth = val; updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
         const btnExport = document.getElementById('btn-export'); btnExport.addEventListener('click', () => { state.autoRotate = false; controls.autoRotate = false; btnExport.classList.add('btn-active-yellow'); exportSVG(); });
@@ -1396,6 +1432,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setCheck('use-swirl', state.swirl.enabled); setDisplay('swirl-controls', state.swirl.enabled); setVal('swirl-axis', state.swirl.axis); setVal('swirl-str', state.swirl.str); setVal('val-swirl-str', state.swirl.str);
         setCheck('use-quantize', state.quantize.enabled); setDisplay('quantize-controls', state.quantize.enabled); setVal('quantize-axis', state.quantize.axis); setVal('quantize-steps', state.quantize.steps); setVal('val-quantize-steps', state.quantize.steps);
         setCheck('use-zigzag', state.zigzag.enabled); setDisplay('zigzag-controls', state.zigzag.enabled); setVal('zigzag-axis', state.zigzag.axis); setVal('zigzag-amp', state.zigzag.amp); setVal('val-zigzag-amp', state.zigzag.amp); setVal('zigzag-freq', state.zigzag.freq); setVal('val-zigzag-freq', state.zigzag.freq);
+        setCheck('use-smooth', state.smooth.enabled); setDisplay('smooth-controls', state.smooth.enabled); setVal('smooth-str', state.smooth.str); setVal('val-smooth-str', state.smooth.str); setVal('smooth-iters', state.smooth.iters); setVal('val-smooth-iters', state.smooth.iters);
 
         setVal('cam-x', state.cam.x); setVal('cam-y', state.cam.y); setVal('cam-z', state.cam.z); setVal('cam-fov', state.cam.fov); setVal('val-cam-fov', state.cam.fov);
         if(state.cam.target) {
@@ -1437,9 +1474,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setDisplay('ctrl-hl-method', isHiddenLine || isTriangles || isWireframe); setDisplay('ctrl-hl-proper-order', true);
         setDisplay('ctrl-gpu-grid', (isHiddenLine || isTriangles || isWireframe) && state.occlusionMethod === 'gpu');
+        
+        setDisplay('ctrl-hl-invert', isHiddenLine || isTriangles);
+        setDisplay('ctrl-hl-advanced', isHiddenLine || isTriangles);
 
         setVal('hl-epsilon', state.hiddenSettings.epsilon); setVal('val-hl-epsilon', state.hiddenSettings.epsilon); setVal('hl-spline-res', state.hiddenSettings.splineRes); setVal('val-hl-spline-res', state.hiddenSettings.splineRes);
-        setVal('hl-method', state.occlusionMethod); setVal('gpu-grid', state.gpuGridSize); setCheck('hl-proper-order', state.properOrder);        setVal('hl-bias', state.hiddenSettings.bias); setVal('val-hl-bias', state.hiddenSettings.bias);
+        setVal('hl-method', state.occlusionMethod); setVal('gpu-grid', state.gpuGridSize); setVal('hl-bias', state.hiddenSettings.bias); setVal('val-hl-bias', state.hiddenSettings.bias);
 
         setVal('hl-inflate', state.hiddenSettings.inflate); setVal('val-hl-inflate', state.hiddenSettings.inflate);
         setVal('hl-min-len', state.hiddenSettings.minLen); setVal('val-hl-min-len', state.hiddenSettings.minLen);
@@ -1448,6 +1488,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setCheck('use-z-color', state.zDepth.color); setDisplay('z-color-controls', state.zDepth.color);
         setCheck('use-z-opacity', state.zDepth.opacity); setDisplay('z-opacity-controls', state.zDepth.opacity);
         setCheck('use-z-dof', state.zDepth.dof); setDisplay('z-dof-controls', state.zDepth.dof);
+        setCheck('use-z-size', state.zDepth.size); setDisplay('z-size-controls', state.zDepth.size);
+        
+        setVal('z-size-near', state.zSize.near); setVal('val-z-size-near', state.zSize.near);
+        setVal('z-size-far', state.zSize.far); setVal('val-z-size-far', state.zSize.far);
         setVal('dof-focus', state.dof.focus); setVal('val-dof-focus', state.dof.focus); setVal('dof-intensity', state.dof.intensity); setVal('val-dof-intensity', state.dof.intensity); setVal('dof-aperture', state.dof.aperture); setVal('val-dof-aperture', state.dof.aperture);
         if (typeof curveEditor !== 'undefined') { curveEditor.localOp = undefined; curveEditor.localSize = undefined; }
         setCheck('dof-ignore-near', state.dof.ignoreNear); setVal('input-col-near', state.colorNear); setVal('input-col-far', state.colorFar);
@@ -1497,6 +1541,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switch (landscapeState.noiseType) {
             case 'perlin': noiseGenerator = new PerlinNoise(rng); break;
             case 'worley': noiseGenerator = new WorleyNoise(rng); break;
+            case 'voronoi': noiseGenerator = new VoronoiNoise(rng); break;
             case 'value': noiseGenerator = new ValueNoise(rng); break;
             case 'turbulence': noiseGenerator = new TurbulenceNoise(SimplexNoise, rng); break;
             case 'ridged': noiseGenerator = new RidgedMultifractalNoise(SimplexNoise, rng); break;
@@ -1728,7 +1773,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isHiddenLine && isSpline && state.solidSubdiv > 1) {
              geoSolid = generateBaseGeometry(state.solidSubdiv);
         } else {
-             geoSolid = generateBaseGeometry(1); 
+             geoSolid = geoWire.clone(); 
         }
 
         const applyDeformations = (geometry, options = {}) => {
@@ -1738,6 +1783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             switch (state.noise.noiseType) {
                 case 'perlin': noiseGenerator = new PerlinNoise(rng); break;
                 case 'worley': noiseGenerator = new WorleyNoise(rng); break;
+                case 'voronoi': noiseGenerator = new VoronoiNoise(rng); break;
                 case 'value': noiseGenerator = new ValueNoise(rng); break;
                 case 'turbulence': noiseGenerator = new TurbulenceNoise(SimplexNoise, rng); break;
                 case 'ridged': noiseGenerator = new RidgedMultifractalNoise(SimplexNoise, rng); break;
@@ -1749,7 +1795,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const deformations = {
                 twist: (v, p) => { const axisIdx = axMap[p.axis], angle = v.getComponent(axisIdx) * p.angle, c = Math.cos(angle), s = Math.sin(angle), uIdx = (axisIdx + 1) % 3, wIdx = (axisIdx + 2) % 3, u = v.getComponent(uIdx), w = v.getComponent(wIdx); v.setComponent(uIdx, u * c - w * s); v.setComponent(wIdx, u * s + w * c); },
                 wave: (v, p) => { const axisIdx = axMap[p.axis], u = v.getComponent((axisIdx + 1) % 3), w = v.getComponent((axisIdx + 2) % 3), val = v.getComponent(axisIdx); v.setComponent(axisIdx, val + Math.sin(u * p.freq + w * p.freq) * p.int); },
-                noise: (v, p) => { const n = simplex.noise3D(v.x * p.freq, v.y * p.freq, v.z * p.freq) * p.amp; if (p.axis === 'all') { vDir.copy(v).normalize(); v.addScaledVector(vDir, n); } else if (p.axis === 'center') { vDir.copy(v); v.addScaledVector(vDir, n); } else { const idx = axMap[p.axis]; v.setComponent(idx, v.getComponent(idx) + n); } },
+                noise: (v, p) => { if (p.axis === 'all') { v.x += simplex.noise3D(v.x * p.freq, v.y * p.freq, v.z * p.freq) * p.amp; v.y += simplex.noise3D(v.x * p.freq + 100, v.y * p.freq + 100, v.z * p.freq + 100) * p.amp; v.z += simplex.noise3D(v.x * p.freq + 200, v.y * p.freq + 200, v.z * p.freq + 200) * p.amp; } else { const n = simplex.noise3D(v.x * p.freq, v.y * p.freq, v.z * p.freq) * p.amp; if (p.axis === 'center') { vDir.copy(v).normalize(); v.addScaledVector(vDir, n); } else { const idx = axMap[p.axis]; v.setComponent(idx, v.getComponent(idx) + n); } } },
                 bulge: (v, p) => { const dist = v.length(), factor = 1 + (Math.sin(dist * 3.0) * p.str * 0.5); if (p.axis === 'all') v.multiplyScalar(factor); else { const idx = axMap[p.axis]; v.setComponent(idx, v.getComponent(idx) * factor); } },
                 bend: (v, p) => { const axisIdx = axMap[p.axis], mainVal = v.getComponent(axisIdx), targetIdx = (axisIdx + 1) % 3, current = v.getComponent(targetIdx); v.setComponent(targetIdx, current + (mainVal * mainVal) * p.amt); },
                 taper: (v, p) => { const axisIdx = axMap[p.axis], mainVal = v.getComponent(axisIdx), scale = Math.max(0, 1 + (mainVal * p.amt)), uIdx = (axisIdx + 1) % 3, wIdx = (axisIdx + 2) % 3; v.setComponent(uIdx, v.getComponent(uIdx) * scale); v.setComponent(wIdx, v.getComponent(wIdx) * scale); },
@@ -1762,11 +1808,59 @@ document.addEventListener('DOMContentLoaded', () => {
                 quantize: (v, p) => { const steps = Math.max(1, p.steps); if (p.axis === 'all') { v.x = Math.round(v.x * steps) / steps; v.y = Math.round(v.y * steps) / steps; v.z = Math.round(v.z * steps) / steps; } else { const idx = axMap[p.axis]; v.setComponent(idx, Math.round(v.getComponent(idx) * steps) / steps); } },
                 zigzag: (v, p) => { const axisIdx = axMap[p.axis], val = v.getComponent(axisIdx), uIdx = (axisIdx+1)%3, wIdx = (axisIdx+2)%3; v.setComponent(uIdx, v.getComponent(uIdx) + Math.asin(Math.sin(val * p.freq)) * p.amp); v.setComponent(wIdx, v.getComponent(wIdx) + Math.asin(Math.sin(val * p.freq + Math.PI/2)) * p.amp); }
             };
-            for (let i = 0; i < pos.count; i++) {
-                v.fromBufferAttribute(pos, i);
-                state.deformationOrder.forEach(type => { if (state[type] && state[type].enabled) deformations[type](v, state[type]); });
-                pos.setXYZ(i, v.x, v.y, v.z);
-            }
+            state.deformationOrder.forEach(type => { 
+                if (state[type] && state[type].enabled) {
+                    if (type === 'smooth') {
+                        const amt = state[type].str;
+                        let actualIters = Math.round(state[type].iters || 1);
+                        if (geometry === geoSolid && state.solidSubdiv > 1) {
+                            actualIters = Math.round(actualIters * state.solidSubdiv * state.solidSubdiv);
+                        }
+                        const arr = pos.array;
+                        const vCount = pos.count;
+                        
+                        if (geometry.index) {
+                            const idx = geometry.index.array;
+                            for (let k = 0; k < actualIters; k++) {
+                                const sumArr = new Float32Array(arr.length);
+                                const countArr = new Uint16Array(vCount);
+                                for (let i = 0; i < idx.length; i+=3) {
+                                    const a = idx[i], b = idx[i+1], c = idx[i+2];
+                                    sumArr[a*3] += arr[b*3]+arr[c*3]; countArr[a]+=2; sumArr[a*3+1] += arr[b*3+1]+arr[c*3+1]; sumArr[a*3+2] += arr[b*3+2]+arr[c*3+2];
+                                    sumArr[b*3] += arr[a*3]+arr[c*3]; countArr[b]+=2; sumArr[b*3+1] += arr[a*3+1]+arr[c*3+1]; sumArr[b*3+2] += arr[a*3+2]+arr[c*3+2];
+                                    sumArr[c*3] += arr[a*3]+arr[b*3]; countArr[c]+=2; sumArr[c*3+1] += arr[a*3+1]+arr[b*3+1]; sumArr[c*3+2] += arr[a*3+2]+arr[b*3+2];
+                                }
+                                for (let i = 0; i < vCount; i++) {
+                                    if (countArr[i] > 0) {
+                                        arr[i*3] = arr[i*3]*(1-amt) + (sumArr[i*3]/countArr[i])*amt;
+                                        arr[i*3+1] = arr[i*3+1]*(1-amt) + (sumArr[i*3+1]/countArr[i])*amt;
+                                        arr[i*3+2] = arr[i*3+2]*(1-amt) + (sumArr[i*3+2]/countArr[i])*amt;
+                                    }
+                                }
+                            }
+                        } else {
+                            for (let k = 0; k < actualIters; k++) {
+                                const newArr = new Float32Array(arr.length);
+                                for (let i = 0; i < vCount; i++) {
+                                    const prev = Math.max(0, i - 1) * 3;
+                                    const next = Math.min(vCount - 1, i + 1) * 3;
+                                    const curr = i * 3;
+                                    newArr[curr] = arr[curr]*(1-amt) + (arr[prev] + arr[next])*0.5*amt;
+                                    newArr[curr+1] = arr[curr+1]*(1-amt) + (arr[prev+1] + arr[next+1])*0.5*amt;
+                                    newArr[curr+2] = arr[curr+2]*(1-amt) + (arr[prev+2] + arr[next+2])*0.5*amt;
+                                }
+                                pos.array.set(newArr);
+                            }
+                        }
+                    } else {
+                        for (let i = 0; i < pos.count; i++) {
+                            v.fromBufferAttribute(pos, i);
+                            deformations[type](v, state[type]);
+                            pos.setXYZ(i, v.x, v.y, v.z);
+                        }
+                    }
+                }
+            });
             if (!skipNormals) geometry.computeVertexNormals();
         };
 
@@ -1835,7 +1929,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // For X rotation, we treat it as a vertical offset or secondary rotation
                         // A more complete way is 3D normal rotation, but for Matcaps 2D rotation + offsets works well.
-                        // Let's use simple 2D rotation for Y and treat X as a direct offset for now to keep it intuitive.
                         vec4 matcapColor = texture2D( matcap, spinUV + 0.5 + vec2(0.0, matcapRotation.x * 0.5) );
                         `
                     );
@@ -1893,16 +1986,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!state.svgPreview) return; state.svgPreview = false;
         const btn = document.getElementById('btn-preview-svg'); if(btn) btn.classList.remove('btn-active-yellow');
         cachedSVGContent = null; if (previewAbortController) { previewAbortController.abort(); previewAbortController = null; }
-        const cont = document.getElementById('svg-container'); const canv = document.getElementById('canvas-container'); const info = document.getElementById('info-export-match'); const loader = document.getElementById('preview-loader');
-        if(cont) { cont.style.display = 'none'; cont.innerHTML = ''; } if(canv) canv.style.opacity = '1'; if(info) info.textContent = "Export doesn't match the preview exactly."; if(loader) loader.style.display = 'none'; updateMaterialUniforms();
+        const cont = document.getElementById('svg-container'); const canv = document.getElementById('canvas-container'); const loader = document.getElementById('preview-loader');
+        if(cont) { cont.style.display = 'none'; cont.innerHTML = ''; } if(canv) canv.style.opacity = '1'; if(loader) loader.style.display = 'none'; updateMaterialUniforms();
     }
     async function enableSVGPreview() {
         if (state.svgPreview) return; if (previewAbortController) previewAbortController.abort(); previewAbortController = new AbortController(); const signal = previewAbortController.signal;
         state.svgPreview = true; cachedSVGContent = null;
-        const cont = document.getElementById('svg-container'); const canv = document.getElementById('canvas-container'); const info = document.getElementById('info-export-match'); const pLoader = document.getElementById('preview-loader'); const pBar = document.getElementById('preview-bar');
+        const cont = document.getElementById('svg-container'); const canv = document.getElementById('canvas-container'); const pLoader = document.getElementById('preview-loader'); const pBar = document.getElementById('preview-bar');
         const pMessage = document.getElementById('preview-message'); const pStats = document.getElementById('preview-stats');
         if(pMessage) pMessage.textContent = 'Generating Preview...'; if(pStats) pStats.textContent = 'Lines: 0 Dots: 0';
-        if(cont) { cont.style.display = 'block'; cont.innerHTML = ''; } if(canv) canv.style.opacity = '0'; if(info) info.textContent = "Export matches the preview exactly."; if(pLoader) pLoader.style.display = 'flex'; if(pBar) pBar.style.width = '0%';
+        if(cont) { cont.style.display = 'block'; cont.innerHTML = ''; } if(canv) canv.style.opacity = '0'; if(pLoader) pLoader.style.display = 'flex'; if(pBar) pBar.style.width = '0%';
         const cancelHandler = (e) => { if (e.key === 'Escape') { disableSVGPreview(); document.removeEventListener('keydown', cancelHandler); } }; document.addEventListener('keydown', cancelHandler);
         try {
             const width = container.clientWidth, height = container.clientHeight, bg = state.style.includes('hidden') || state.style === 'halftone' || state.style === 'checkerboard' ? '#111' : 'transparent';
@@ -2401,7 +2494,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- DEPTH ANALYSIS (skip if no zDepth features are enabled for performance) ---
         let minVal = Infinity, maxVal = -Infinity, safeRange = 1.0, minZ = 0, maxZ = 1, safeZRange = 1.0, gradDir = null;
         let opMinZ = 0, opMaxZ = 1, safeOpZRange = 1.0;
-        const useZDepth = state.zDepth.color || state.zDepth.opacity || state.zDepth.dof;
+        const useZDepth = state.zDepth.color || state.zDepth.opacity || state.zDepth.dof || state.zDepth.size;
         const useDOF = state.zDepth.dof;
         let opEval = null, sizeEval = null;
         
@@ -2449,6 +2542,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.zDepth.opacity) {
                     const opT = Math.max(0.0, Math.min(1.0, (metric - opMinZ) / safeOpZRange));
                     op *= (1.0 - opT);
+                }
+                if (state.zDepth.size) {
+                    const sT = Math.max(0.0, Math.min(1.0, (metric - minZ) / safeZRange));
+                    const targetSize = state.zSize.near + (state.zSize.far - state.zSize.near) * sT;
+                    scale *= targetSize / (state.style === 'dots' ? state.pointSize : state.strokeWidth);
                 }
                 
                 if (useDOF) { 
