@@ -275,8 +275,24 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const state = {
+        geometries: [{
+            id: 'geo-' + Math.random().toString(36).substr(2, 9),
+            type: 'cube',
+            params: [2, 2, 2, 5, 5, 5, 1],
+            pos: { x:0, y:0, z:0 },
+            rot: { x:0, y:0, z:0 },
+            scl: { x:1, y:1, z:1 },
+            mathFormula: 'sin(x*a) * cos(z*b) * c',
+            mathVars: { a: 1.0, b: 1.0, c: 1.0 },
+            parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
+            landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9 }
+        }],
+        activeGeoId: null,
         geoType: 'cube', 
         geoParams: [],
+        geoPos: { x:0, y:0, z:0 },
+        geoRot: { x:0, y:0, z:0 },
+        geoScl: { x:1, y:1, z:1 },
         solidSubdiv: 2, 
         mathFormula: 'sin(x*a) * cos(z*b) * c',
         mathVars: { a: 1.0, b: 1.0, c: 1.0 },
@@ -824,6 +840,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initScene();
     setupUI();
+    setupMultipleGeometriesUI();
     setupPresets();
     setupPresetButtons(); 
     rebuildUIParams();
@@ -889,12 +906,175 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (state.geoType === 'parametric') { 
                     state.geoParams[0] = p.uMin; state.geoParams[1] = p.uMax; 
                     state.geoParams[2] = p.vMin; state.geoParams[3] = p.vMax; 
-                    rebuildUIParams(true); 
+                    rebuildUIParams(true);
+        if (typeof renderGeoList === 'function') renderGeoList(); 
                 }
                 updateGeometry();
                 e.target.value = "";
             });
         }
+    }
+
+    
+    function syncStateToActiveGeometry() {
+        if (!state.activeGeoId) return;
+        const geo = state.geometries.find(g => g.id === state.activeGeoId);
+        if (geo) {
+            geo.type = state.geoType;
+            geo.params = [...state.geoParams];
+            geo.pos = { ...state.geoPos };
+            geo.rot = { ...state.geoRot };
+            geo.scl = { ...state.geoScl };
+            geo.mathFormula = state.mathFormula;
+            geo.mathVars = { ...state.mathVars };
+            geo.parametricFormulas = { ...state.parametricFormulas };
+            geo.landscape = { ...state.landscape };
+        }
+    }
+
+    function syncActiveGeometryToState(geoId) {
+        state.activeGeoId = geoId;
+        const geo = state.geometries.find(g => g.id === geoId);
+        if (geo) {
+            state.geoType = geo.type;
+            state.geoParams = [...geo.params];
+            state.geoPos = { ...geo.pos };
+            state.geoRot = { ...geo.rot };
+            state.geoScl = { ...geo.scl };
+            state.mathFormula = geo.mathFormula;
+            state.mathVars = { ...geo.mathVars };
+            state.parametricFormulas = { ...geo.parametricFormulas };
+            state.landscape = { ...geo.landscape };
+            
+            document.getElementById('geo-pos-x').value = state.geoPos.x;
+            document.getElementById('geo-pos-y').value = state.geoPos.y;
+            document.getElementById('geo-pos-z').value = state.geoPos.z;
+            document.getElementById('geo-rot-x').value = state.geoRot.x;
+            document.getElementById('geo-rot-y').value = state.geoRot.y;
+            document.getElementById('geo-rot-z').value = state.geoRot.z;
+            document.getElementById('geo-scl-x').value = state.geoScl.x;
+            document.getElementById('geo-scl-y').value = state.geoScl.y;
+            document.getElementById('geo-scl-z').value = state.geoScl.z;
+            
+            rebuildUIParams(true);
+        if (typeof renderGeoList === 'function') renderGeoList();
+            updateUIFromState();
+            renderGeoList();
+            updateGeometry();
+        }
+    }
+
+    function renderGeoList() {
+        const list = document.getElementById('geo-list');
+        if (!list) return;
+        list.innerHTML = '';
+        state.geometries.forEach((geo, index) => {
+            const li = document.createElement('li');
+            li.style.padding = '8px 10px';
+            li.style.borderBottom = '1px solid #333';
+            li.style.display = 'flex';
+            li.style.justifyContent = 'space-between';
+            li.style.alignItems = 'center';
+            li.style.cursor = 'pointer';
+            li.style.background = state.activeGeoId === geo.id ? '#007aff44' : 'transparent';
+            li.draggable = true;
+            
+            li.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', index);
+                li.style.opacity = '0.5';
+            });
+            li.addEventListener('dragend', () => { li.style.opacity = '1'; });
+            li.addEventListener('dragover', (e) => { e.preventDefault(); });
+            li.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const draggedIdx = parseInt(e.dataTransfer.getData('text/plain'));
+                if (draggedIdx !== index) {
+                    const moved = state.geometries.splice(draggedIdx, 1)[0];
+                    state.geometries.splice(index, 0, moved);
+                    saveHistory();
+                    renderGeoList();
+                    updateGeometry();
+                }
+            });
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = geo.type.charAt(0).toUpperCase() + geo.type.slice(1);
+            nameSpan.style.fontSize = '12px';
+            nameSpan.style.pointerEvents = 'none';
+            
+            const btnGroup = document.createElement('div');
+            btnGroup.style.display = 'flex';
+            btnGroup.style.gap = '5px';
+            
+            const delBtn = document.createElement('button');
+            delBtn.innerHTML = '×';
+            delBtn.style.background = 'transparent';
+            delBtn.style.border = 'none';
+            delBtn.style.color = '#ff4444';
+            delBtn.style.cursor = 'pointer';
+            delBtn.style.padding = '0 5px';
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (state.geometries.length > 1) {
+                    saveHistory();
+                    state.geometries = state.geometries.filter(g => g.id !== geo.id);
+                    if (state.activeGeoId === geo.id) syncActiveGeometryToState(state.geometries[0].id);
+                    else { renderGeoList(); updateGeometry(); }
+                }
+            };
+            
+            btnGroup.appendChild(delBtn);
+            
+            li.appendChild(nameSpan);
+            li.appendChild(btnGroup);
+            
+            li.onclick = () => syncActiveGeometryToState(geo.id);
+            list.appendChild(li);
+        });
+    }
+
+    function setupMultipleGeometriesUI() {
+        if(!state.activeGeoId && state.geometries.length > 0) state.activeGeoId = state.geometries[0].id;
+        
+        const btnAdd = document.getElementById('btn-add-geometry');
+        if(btnAdd) {
+            btnAdd.addEventListener('click', () => {
+                saveHistory();
+                const newGeo = {
+                    id: 'geo-' + Math.random().toString(36).substr(2, 9),
+                    type: 'cube',
+                    params: [2, 2, 2, 5, 5, 5, 1],
+                    pos: { x:0, y:0, z:0 },
+                    rot: { x:0, y:0, z:0 },
+                    scl: { x:1, y:1, z:1 },
+                    mathFormula: 'sin(x*a) * cos(z*b) * c',
+                    mathVars: { a: 1.0, b: 1.0, c: 1.0 },
+                    parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
+                    landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9 }
+                };
+                state.geometries.push(newGeo);
+                syncActiveGeometryToState(newGeo.id);
+            });
+        }
+        
+        ['pos','rot','scl'].forEach(prop => {
+            ['x','y','z'].forEach(axis => {
+                const el = document.getElementById(`geo-${prop}-${axis}`);
+                if(el) {
+                    el.addEventListener('input', (e) => {
+                        let val = parseFloat(e.target.value);
+                        if(isNaN(val)) val = prop === 'scl' ? 1 : 0;
+                        if(prop === 'pos') state.geoPos[axis] = val;
+                        if(prop === 'rot') state.geoRot[axis] = val;
+                        if(prop === 'scl') state.geoScl[axis] = val;
+                        updateGeometry();
+                    });
+                    el.addEventListener('change', () => saveHistory());
+                }
+            });
+        });
+        
+        renderGeoList();
     }
 
     function initScene() {
@@ -1359,10 +1539,22 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '';
         if (!config || !config.params) return;
 
-        if (!preserveState) state.geoParams = [];
+        if (!preserveState) {
+            state.geoParams = [];
+            if(state.activeGeoId) {
+                const geo = state.geometries.find(g => g.id === state.activeGeoId);
+                if(geo) geo.params = [];
+            }
+        }
 
         config.params.forEach((p, idx) => {
-            if (!preserveState) state.geoParams.push(p.def);
+            if (!preserveState) {
+                state.geoParams.push(p.def);
+                if(state.activeGeoId) {
+                    const geo = state.geometries.find(g => g.id === state.activeGeoId);
+                    if(geo) geo.params.push(p.def);
+                }
+            }
             const group = document.createElement('div'); group.className = 'control';
             if (p.type === 'bool') {
                  const label = document.createElement('label'); label.style.display = 'flex'; label.style.alignItems = 'center'; label.style.gap = '8px';
@@ -1411,6 +1603,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const btnReorder = document.getElementById('btn-reorder-deform'); if (btnReorder) { btnReorder.classList.toggle('active', state.reorderMode); }
 
         rebuildUIParams(true);
+        if (typeof renderGeoList === 'function') renderGeoList();
 
         document.getElementById('obj-rot-x').value = state.objRot.x; document.getElementById('obj-rot-y').value = state.objRot.y; document.getElementById('obj-rot-z').value = state.objRot.z;
 
@@ -1758,23 +1951,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return geo;
     }
 
+    
+    
     function updateGeometry() {
         if (mainMeshGroup) { scene.remove(mainMeshGroup); if (mainMeshGroup.userData.dispose) mainMeshGroup.userData.dispose(); }
 
-        const geoWire = generateBaseGeometry(1);
-        
-        const isHiddenLine = state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid' || state.style === 'halftone' || state.style === 'checkerboard';
-        let isSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
-        if (state.geoType === 'grid' && state.geoParams[4]) isSpline = true;
-        if (state.geoType === 'cube' && state.geoParams[6]) isSpline = true;
-        if (state.geoType === 'landscape') isSpline = true;
-
-        let geoSolid;
-        if (isHiddenLine && isSpline && state.solidSubdiv > 1) {
-             geoSolid = generateBaseGeometry(state.solidSubdiv);
-        } else {
-             geoSolid = geoWire.clone(); 
-        }
+        syncStateToActiveGeometry();
 
         const applyDeformations = (geometry, options = {}) => {
             const { skipNormals = false } = options;
@@ -1813,7 +1995,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (type === 'smooth') {
                         const amt = state[type].str;
                         let actualIters = Math.round(state[type].iters || 1);
-                        if (geometry === geoSolid && state.solidSubdiv > 1) {
+                        if (options.isSolid && state.solidSubdiv > 1) {
                             actualIters = Math.round(actualIters * state.solidSubdiv * state.solidSubdiv);
                         }
                         const arr = pos.array;
@@ -1864,8 +2046,87 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!skipNormals) geometry.computeVertexNormals();
         };
 
-        applyDeformations(geoWire);
-        if (geoSolid !== geoWire) applyDeformations(geoSolid);
+        let mergedGeoWire = [];
+        let mergedGeoSolid = [];
+        let anySplineCount = false;
+
+        const originalGeoType = state.geoType;
+        const originalGeoParams = [...state.geoParams];
+        const originalMathFormula = state.mathFormula;
+        const originalMathVars = { ...state.mathVars };
+        const originalParametricFormulas = { ...state.parametricFormulas };
+        const originalLandscape = { ...state.landscape };
+
+        state.geometries.forEach(geoDef => {
+            state.geoType = geoDef.type;
+            state.geoParams = geoDef.params;
+            state.mathFormula = geoDef.mathFormula;
+            state.mathVars = geoDef.mathVars;
+            state.parametricFormulas = geoDef.parametricFormulas;
+            state.landscape = geoDef.landscape;
+
+            const geoWire = generateBaseGeometry(1);
+            
+            const matrix = new THREE.Matrix4();
+            const euler = new THREE.Euler(geoDef.rot.x * Math.PI/180, geoDef.rot.y * Math.PI/180, geoDef.rot.z * Math.PI/180);
+            const quaternion = new THREE.Quaternion().setFromEuler(euler);
+            const scale = new THREE.Vector3(geoDef.scl.x, geoDef.scl.y, geoDef.scl.z);
+            const position = new THREE.Vector3(geoDef.pos.x, geoDef.pos.y, geoDef.pos.z);
+            matrix.compose(position, quaternion, scale);
+            geoWire.applyMatrix4(matrix);
+
+            const isHiddenLine = state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid' || state.style === 'halftone' || state.style === 'checkerboard';
+            let isSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
+            if (state.geoType === 'grid' && state.geoParams[4]) isSpline = true;
+            if (state.geoType === 'cube' && state.geoParams[6]) isSpline = true;
+            if (state.geoType === 'landscape') isSpline = true;
+            if (sphereTypes.includes(state.geoType) && state.geoType !== 'sphere') isSpline = false; 
+            if (state.geoType === 'sphere') isSpline = true; 
+
+            let geoSolid;
+            if (isHiddenLine && isSpline && state.solidSubdiv > 1) {
+                geoSolid = generateBaseGeometry(state.solidSubdiv);
+                geoSolid.applyMatrix4(matrix);
+            } else {
+                geoSolid = geoWire.clone();
+            }
+
+            applyDeformations(geoWire);
+            if (geoSolid !== geoWire && geoSolid.uuid !== geoWire.uuid) {
+                applyDeformations(geoSolid, { isSolid: true });
+            }
+
+            let wireGeo;
+            if (state.style === 'halftone') {
+                wireGeo = new THREE.BufferGeometry();
+            } else if (state.style === 'dots' || state.style === 'dots-solid') {
+                wireGeo = geoWire.clone();
+            } else if (state.style === 'triangles') {
+                wireGeo = new THREE.WireframeGeometry(geoWire);
+            } else if (state.geoType === 'sphere-circles') {
+                wireGeo = createOverlappingCirclesWireframe(state.geoParams);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+            } else if (isSpline) {
+                wireGeo = createSplineWireframe(geoWire, state.geoParams, state.geoType, state.spline.subdiv);
+                anySplineCount = true;
+            } else {
+                wireGeo = createQuadWireframe(geoWire);
+            }
+
+            mergedGeoWire.push(wireGeo);
+            mergedGeoSolid.push(geoSolid);
+        });
+
+        state.geoType = originalGeoType;
+        state.geoParams = originalGeoParams;
+        state.mathFormula = originalMathFormula;
+        state.mathVars = originalMathVars;
+        state.parametricFormulas = originalParametricFormulas;
+        state.landscape = originalLandscape;
+
+        let finalGeoWire = mergedGeoWire.length > 0 ? THREE.BufferGeometryUtils.mergeBufferGeometries(mergedGeoWire) : new THREE.BufferGeometry();
+        let finalGeoSolid = mergedGeoSolid.length > 0 ? THREE.BufferGeometryUtils.mergeBufferGeometries(mergedGeoSolid) : new THREE.BufferGeometry();
 
         mainMeshGroup = new THREE.Group();
         mainMeshGroup.rotation.set(THREE.MathUtils.degToRad(state.objRot.x), THREE.MathUtils.degToRad(state.objRot.y), THREE.MathUtils.degToRad(state.objRot.z));
@@ -1886,9 +2147,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const style = state.style; let meshWire; let meshSolid;
         if (style === 'hidden-line' || style === 'triangles' || style === 'dots-solid' || style === 'halftone' || style === 'checkerboard') {
             
-            let solidGeoToUse = geoSolid;
+            let solidGeoToUse = finalGeoSolid;
             if (Math.abs(state.hiddenSettings.inflate) > 0.0001) {
-                solidGeoToUse = geoSolid.clone();
+                solidGeoToUse = finalGeoSolid.clone();
                 const pos = solidGeoToUse.attributes.position;
                 const norm = solidGeoToUse.attributes.normal;
                 const v = new THREE.Vector3();
@@ -1944,39 +2205,21 @@ document.addEventListener('DOMContentLoaded', () => {
             meshWire = new THREE.Points(new THREE.BufferGeometry(), new THREE.PointsMaterial({visible: false}));
         } else if (style === 'dots' || style === 'dots-solid') {
             const m = matWireShader.clone(); m.clipping = true; m.clippingPlanes = clipPlanes;
-            meshWire = new THREE.Points(geoWire, m);
+            meshWire = new THREE.Points(finalGeoWire, m);
         } else {
-            let useSpline = ['math', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'parametric'].includes(state.geoType);
-            if (state.geoType === 'grid' && state.geoParams[4]) useSpline = true;
-            if (state.geoType === 'cube' && state.geoParams[6]) useSpline = true;
-            if (state.geoType === 'landscape') useSpline = true;
-            if (sphereTypes.includes(state.geoType) && state.geoType !== 'sphere') useSpline = false; 
-            if (state.geoType === 'sphere') useSpline = true; 
-
-            let wireGeo;
-            if (state.style === 'triangles') {
-                wireGeo = new THREE.WireframeGeometry(geoWire);
-            } else if (state.geoType === 'sphere-circles') {
-                wireGeo = createOverlappingCirclesWireframe(state.geoParams);
-                applyDeformations(wireGeo, { skipNormals: true });
-            } else if (useSpline) {
-                wireGeo = createSplineWireframe(geoWire, state.geoParams, state.geoType, state.spline.subdiv);
-            } else {
-                wireGeo = createQuadWireframe(geoWire);
-            }
-            
             const m = matWireShader.clone(); m.clipping = true; m.clippingPlanes = clipPlanes;
-            meshWire = new THREE.LineSegments(wireGeo, m);
+            meshWire = new THREE.LineSegments(finalGeoWire, m);
         }
+        
         mainMeshGroup.add(meshWire);
         mainMeshGroup.userData.solid = meshSolid; mainMeshGroup.userData.wire = meshWire; mainMeshGroup.userData.clipPlane = clipPlanes.length > 0 ? clipPlanes[0] : null;
-        mainMeshGroup.userData.dispose = () => { geoWire.dispose(); if(geoSolid && geoSolid !== geoWire) geoSolid.dispose(); if(meshSolid) meshSolid.material.dispose(); if(meshWire.geometry) meshWire.geometry.dispose(); if(meshWire.material) meshWire.material.dispose(); };
+        mainMeshGroup.userData.dispose = () => { finalGeoWire.dispose(); if(finalGeoSolid && finalGeoSolid !== finalGeoWire) finalGeoSolid.dispose(); if(meshSolid) meshSolid.material.dispose(); if(meshWire.geometry) meshWire.geometry.dispose(); if(meshWire.material) meshWire.material.dispose(); };
         scene.add(mainMeshGroup);
 
-        const isSplineCount = mainMeshGroup.userData.wire && mainMeshGroup.userData.wire.geometry && mainMeshGroup.userData.wire.geometry.userData && mainMeshGroup.userData.wire.geometry.userData.splineGroups;
-        document.getElementById('poly-count').textContent = `${geoWire.attributes.position.count / 3 | 0} tris${isSplineCount ? ' (splines)' : ''}`;
+        document.getElementById('poly-count').textContent = `${finalGeoWire.attributes.position ? finalGeoWire.attributes.position.count / 3 | 0 : 0} tris${anySplineCount ? ' (splines)' : ''}`;
         if(state.svgPreview) disableSVGPreview();
     }
+
 
     function onWindowResize() { const w = container.clientWidth, h = container.clientHeight; camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h); }
     function animate() { requestAnimationFrame(animate); controls.update(); updateMaterialUniforms(); renderer.render(scene, camera); }
