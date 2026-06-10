@@ -1,5 +1,17 @@
 // --- Utils ---
 function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function isValidFormula(str) {
+    if (typeof str !== 'string') return false;
+    let p = 0;
+    for (let i = 0; i < str.length; i++) {
+        if (str[i] === '(') p++;
+        else if (str[i] === ')') p--;
+        if (p < 0) return false;
+    }
+    if (p !== 0) return false;
+    if (/[\+\-\*\/\,\^]\s*$/.test(str)) return false;
+    return true;
+}
 
 // --- Simplex Noise Implementation ---
 const SimplexNoise = (function() {
@@ -330,13 +342,14 @@ document.addEventListener('DOMContentLoaded', () => {
         legacyHiddenLine: false,
         properOrder: true,
         zDepth: { color: false, opacity: false, dof: false, size: false },
+        lineGradient: { enabled: false, axis: 'both', stops: [{ c: '#0000ff', p: 0.0 }, { c: '#ff0000', p: 1.0 }] },
         zSize: { near: 5, far: 1 },
         halftone: { grid: 10, size: 8, angle: 45, invert: true },
         checkerboard: { col1: '#ffffff', col2: '#000000', invert: false },
         matcapRotation: { x: 0, y: 0 },
         gradMode: 'camera', 
         gradRot: { x: 0, y: 0 }, 
-        baseColor: '#007aff', colorNear: '#ff00ff', colorFar: '#0000ff', gradStart: 0.0, gradEnd: 1.0,
+        baseColor: '#007aff', colorNear: '#ff00ff', colorFar: '#0000ff', gradStart: 0.0, gradEnd: 1.0, colorStops: [{ c: '#0000ff', p: 0.0 }, { c: '#ff0000', p: 1.0 }],
         opGradStart: 0.0, opGradEnd: 1.0,
         strokeWidth: 1.0, dotSize: 6.0,
         dof: { focus: 0, intensity: 2.0, aperture: 5.0, ignoreNear: false, linkCurves: true, smoothCurve: true, opCurve: [{x:0,y:0}, {x:1,y:1}], sizeCurve: [{x:0,y:0}, {x:1,y:1}] }
@@ -392,8 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return new THREE.ShaderMaterial({
             uniforms: {
                 color: { value: new THREE.Color(state.baseColor) },
-                colorNear: { value: new THREE.Color(state.colorNear) },
-                colorFar: { value: new THREE.Color(state.colorFar) },
+                colorMap: { value: null },
                 minZ: { value: 0.0 }, maxZ: { value: 10.0 },
                 opMinZ: { value: 0.0 }, opMaxZ: { value: 10.0 },
                 dofMinZ: { value: 0.0 }, dofMaxZ: { value: 10.0 },
@@ -403,7 +415,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 pointSize: { value: (state.dotSize || 6.0) * (window.devicePixelRatio || 1.0) },
                 dofFocus: { value: 0.5 }, dofIntensity: { value: 5.0 }, dofIgnoreNear: { value: 0 }, dofOpTexture: { value: dummyTex },
                 gradMode: { value: 0 }, 
-                gradDir: { value: new THREE.Vector3(0,0,1) }
+                gradDir: { value: new THREE.Vector3(0,0,1) },
+                useLineGradient: { value: 0 },
+                lineColorMap: { value: null }
             },
             clipping: true,
             vertexShader: `
@@ -415,8 +429,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 uniform int useZSize;
                 uniform float zSizeNear;
                 uniform float zSizeFar;
+                uniform int useLineGradient;
+                attribute float lineValue;
                 varying float vDist;
                 varying float vProj;
+                varying float vLineValue;
                 void main() { 
                     vec4 worldPosition = modelMatrix * vec4(position, 1.0); 
                     if (gradMode == 1) {
@@ -427,6 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
                          vProj = vDist; 
                     }
                     vec4 mvPosition = viewMatrix * worldPosition; 
+                    if (useLineGradient == 1 && lineValue >= 0.0) {
+                        mvPosition.z += 0.001;
+                    }
                     #include <clipping_planes_vertex>
                     gl_Position = projectionMatrix * mvPosition; 
                     if (useZSize == 1) {
@@ -435,12 +455,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         gl_PointSize = pointSize * (5.0 / -mvPosition.z); 
                     }
+                    vLineValue = lineValue;
                 }`,
             fragmentShader: `
                 #include <clipping_planes_pars_fragment>
                 uniform vec3 color; 
-                uniform vec3 colorNear; 
-                uniform vec3 colorFar; 
+                uniform sampler2D colorMap;
                 uniform float minZ; 
                 uniform float maxZ; 
                 uniform float opMinZ;
@@ -455,8 +475,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 uniform int dofIgnoreNear; 
                 uniform sampler2D dofOpTexture; 
                 uniform int gradMode;
+                uniform int useLineGradient;
+                uniform sampler2D lineColorMap;
                 varying float vDist; 
                 varying float vProj;
+                varying float vLineValue;
                 void main() { 
                     #include <clipping_planes_fragment>
                     float metric = (gradMode == 1) ? vProj : vDist;
@@ -464,7 +487,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (range < 0.001) range = 1.0; 
                     float t = clamp((metric - minZ) / range, 0.0, 1.0); 
                     vec4 finalColor = vec4(color, 1.0); 
-                    if (useColor == 1) finalColor.rgb = mix(colorNear, colorFar, t); 
+                    if (useColor == 1) finalColor.rgb = texture2D(colorMap, vec2(t, 0.5)).rgb; 
+                    if (useLineGradient == 1 && vLineValue >= 0.0) finalColor.rgb = texture2D(lineColorMap, vec2(vLineValue, 0.5)).rgb;
                     if (useOpacity == 1) { 
                         float opRange = opMaxZ - opMinZ; 
                         if (opRange < 0.001) opRange = 1.0; 
@@ -475,9 +499,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         float dofRange = dofMaxZ - dofMinZ; 
                         if (dofRange < 0.001) dofRange = 1.0; 
                         float depthT = clamp((vDist - dofMinZ) / dofRange, 0.0, 1.0);
-                        float dist = (gradMode == 1) ? vDist : metric; 
-                        float distT = (gradMode == 1) ? (vDist / 20.0) : depthT; 
-                        float d = distT - dofFocus; 
+                        float d = depthT - dofFocus; 
                         if (dofIgnoreNear == 1 && d < 0.0) d = 0.0; 
                         float blurRaw = clamp(abs(d) * dofIntensity, 0.0, 1.0); 
                         float opFactor = texture2D(dofOpTexture, vec2(blurRaw, 0.5)).r; 
@@ -517,6 +539,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 state[key] = newState[key];
             }
         });
+        if (!state.colorStops) {
+            state.colorStops = [
+                { c: state.colorNear || '#0000ff', p: state.gradStart !== undefined ? state.gradStart : 0.0 },
+                { c: state.colorFar || '#ff0000', p: state.gradEnd !== undefined ? state.gradEnd : 1.0 }
+            ];
+        }
         if (state.deformationOrder) {
             const allDeformations = ['noise', 'smooth', 'twist', 'wave', 'bulge', 'bend', 'taper', 'ripple', 'spherify', 'skew', 'pinch', 'stretch', 'swirl', 'quantize', 'zigzag'];
             const missing = allDeformations.filter(d => !state.deformationOrder.includes(d));
@@ -1175,7 +1203,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const updateShader = (mat) => {
             if (!mat || !mat.uniforms) return;
+            if (window.gradTex) mat.uniforms.colorMap.value = window.gradTex;
             mat.uniforms.useColor.value = state.zDepth.color ? 1 : 0; 
+            mat.uniforms.useLineGradient.value = state.lineGradient.enabled ? 1 : 0;
+            if (window.lineGradTex) mat.uniforms.lineColorMap.value = window.lineGradTex;
             mat.uniforms.useOpacity.value = state.zDepth.opacity ? 1 : 0; 
             mat.uniforms.useDOF.value = state.zDepth.dof ? 1 : 0;
             mat.uniforms.useZSize.value = state.zDepth.size ? 1 : 0;
@@ -1184,8 +1215,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const activeColor = (state.svgPreview && !state.zDepth.color) ? '#f1c40f' : state.baseColor;
             mat.uniforms.color.value.set(activeColor); 
-            mat.uniforms.colorNear.value.set(state.colorNear); 
-            mat.uniforms.colorFar.value.set(state.colorFar);
             
             mat.uniforms.dofFocus.value = state.dof.focus; 
             mat.uniforms.dofIntensity.value = state.dof.intensity; 
@@ -1199,41 +1228,44 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.zDepth.dof) { const tex = generateCurveTexture(state.dof.opCurve); if (mat.uniforms.dofOpTexture.value) mat.uniforms.dofOpTexture.value.dispose(); mat.uniforms.dofOpTexture.value = tex; }
             
             let minVal = Infinity, maxVal = -Infinity;
+            let dofMinVal = 0, dofMaxVal = 10;
             if (mainMeshGroup) {
                 const mesh = mainMeshGroup.userData.wire || mainMeshGroup.children[0];
                 if (mesh && mesh.geometry) { 
                     if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere(); 
+                    const sphere = mesh.geometry.boundingSphere.clone(); 
+                    sphere.applyMatrix4(mesh.matrixWorld);
+                    const camPos = camera.position; 
+                    const dist = camPos.distanceTo(sphere.center); 
+                    dofMinVal = dist - sphere.radius; 
+                    dofMaxVal = dist + sphere.radius; 
+                    
                     if (state.gradMode === 'directional') {
-                        const sphere = mesh.geometry.boundingSphere.clone(); 
-                        sphere.applyMatrix4(mesh.matrixWorld);
                         const dir = getGradientDirection();
                         const cProj = sphere.center.dot(dir);
                         minVal = cProj - sphere.radius;
                         maxVal = cProj + sphere.radius;
                     } else {
-                        const camPos = camera.position; 
-                        const sphere = mesh.geometry.boundingSphere.clone(); 
-                        sphere.applyMatrix4(mesh.matrixWorld); 
-                        const dist = camPos.distanceTo(sphere.center); 
-                        minVal = dist - sphere.radius; 
-                        maxVal = dist + sphere.radius; 
+                        minVal = dofMinVal; 
+                        maxVal = dofMaxVal; 
                     }
-                } else { minVal = 0; maxVal = 10; }
-            } else { minVal = 0; maxVal = 10; }
+                } else { minVal = 0; maxVal = 10; dofMinVal = 0; dofMaxVal = 10; }
+            } else { minVal = 0; maxVal = 10; dofMinVal = 0; dofMaxVal = 10; }
             
             if (state.gradMode === 'camera' && minVal < 0.1) minVal = 0.1;
+            if (state.gradMode === 'camera' && dofMinVal < 0.1) dofMinVal = 0.1;
             
             const range = maxVal - minVal;
             const opStart = state.opGradStart !== undefined ? state.opGradStart : 0.0;
             const opEnd = state.opGradEnd !== undefined ? state.opGradEnd : 1.0;
-            mat.uniforms.minZ.value = minVal + (range * state.gradStart); 
-            mat.uniforms.maxZ.value = minVal + (range * state.gradEnd);
+            mat.uniforms.minZ.value = minVal; 
+            mat.uniforms.maxZ.value = minVal + range;
             
             mat.uniforms.opMinZ.value = minVal + (range * opStart);
             mat.uniforms.opMaxZ.value = minVal + (range * opEnd);
             
-            mat.uniforms.dofMinZ.value = minVal;
-            mat.uniforms.dofMaxZ.value = maxVal;
+            mat.uniforms.dofMinZ.value = dofMinVal;
+            mat.uniforms.dofMaxZ.value = dofMaxVal;
             
             mat.uniforms.cameraPos.value.copy(camera.position); 
             mat.uniforms.pointSize.value = state.dotSize * window.devicePixelRatio;
@@ -1457,6 +1489,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const bindZToggle = (id, key) => { const el = document.getElementById(id); if (el) el.addEventListener('change', (e) => { saveHistory(); state.zDepth[key] = e.target.checked; updateUIFromState(); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); }); };
         bindZToggle('use-z-color', 'color'); bindZToggle('use-z-opacity', 'opacity'); bindZToggle('use-z-dof', 'dof'); bindZToggle('use-z-size', 'size');
+        const elLineGrad = document.getElementById('use-line-gradient');
+        if (elLineGrad) elLineGrad.addEventListener('change', (e) => { saveHistory(); state.lineGradient.enabled = e.target.checked; updateUIFromState(); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
         
         syncInput('z-size-near', 'val-z-size-near', (v) => { state.zSize.near = parseFloat(v); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
         syncInput('z-size-far', 'val-z-size-far', (v) => { state.zSize.far = parseFloat(v); updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
@@ -1466,24 +1500,143 @@ document.addEventListener('DOMContentLoaded', () => {
         curveEditor.init(); document.getElementById('btn-curve-editor').addEventListener('click', () => curveEditor.open());
         document.getElementById('dof-ignore-near').addEventListener('change', (e) => { saveHistory(); state.dof.ignoreNear = e.target.checked; updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); });
 
-        const cNear = document.getElementById('color-near'); if(cNear) { cNear.addEventListener('change', () => saveHistory()); cNear.addEventListener('input', (e) => { state.colorNear = e.target.value; updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview(); }); }
-        
-        const gradBar = document.getElementById('grad-bar'); const stop1 = document.getElementById('stop-1'); const stop2 = document.getElementById('stop-2');
-        const colInput1 = document.getElementById('input-col-near'); const colInput2 = document.getElementById('input-col-far');
-        const updateGradientUI = () => {
-            const p1 = state.gradStart * 100; const p2 = state.gradEnd * 100;
-            stop1.style.left = `${p1}%`; stop2.style.left = `${p2}%`;
-            gradBar.style.background = `linear-gradient(90deg, ${state.colorNear} 0%, ${state.colorNear} ${p1}%, ${state.colorFar} ${p2}%, ${state.colorFar} 100%)`;
-            updateMaterialUniforms(); if(state.svgPreview) disableSVGPreview();
+        const colorPresets = {
+            custom: null,
+            heatmap: [ { c: '#0000ff', p: 0.0 }, { c: '#00ffff', p: 0.25 }, { c: '#00ff00', p: 0.5 }, { c: '#ffff00', p: 0.75 }, { c: '#ff0000', p: 1.0 } ],
+            rainbow: [ { c: '#ff0000', p: 0.0 }, { c: '#ff7f00', p: 0.16 }, { c: '#ffff00', p: 0.33 }, { c: '#00ff00', p: 0.5 }, { c: '#0000ff', p: 0.66 }, { c: '#4b0082', p: 0.83 }, { c: '#9400d3', p: 1.0 } ],
+            hotcold: [ { c: '#0000ff', p: 0.0 }, { c: '#ffffff', p: 0.5 }, { c: '#ff0000', p: 1.0 } ],
+            magma: [ { c: '#000000', p: 0.0 }, { c: '#3b0f70', p: 0.25 }, { c: '#8c2981', p: 0.5 }, { c: '#de4968', p: 0.75 }, { c: '#fe9f6d', p: 1.0 } ],
+            ocean: [ { c: '#000033', p: 0.0 }, { c: '#003399', p: 0.33 }, { c: '#0099ff', p: 0.66 }, { c: '#ffffff', p: 1.0 } ],
+            cyberpunk: [ { c: '#711c91', p: 0.0 }, { c: '#ea00d9', p: 0.33 }, { c: '#0abdc6', p: 0.66 }, { c: '#133e7c', p: 1.0 } ],
+            sunset: [ { c: '#2c1445', p: 0.0 }, { c: '#cc444b', p: 0.33 }, { c: '#f07444', p: 0.66 }, { c: '#f9d276', p: 1.0 } ],
+            forest: [ { c: '#1b4332', p: 0.0 }, { c: '#2d6a4f', p: 0.33 }, { c: '#52b788', p: 0.66 }, { c: '#d8f3dc', p: 1.0 } ],
+            synthwave: [ { c: '#2b00ff', p: 0.0 }, { c: '#ff0055', p: 0.5 }, { c: '#ffbd00', p: 1.0 } ],
+            fireice: [ { c: '#00f2fe', p: 0.0 }, { c: '#4facfe', p: 0.33 }, { c: '#f093fb', p: 0.66 }, { c: '#f5576c', p: 1.0 } ],
+            gold: [ { c: '#332300', p: 0.0 }, { c: '#a67c00', p: 0.33 }, { c: '#bf953f', p: 0.66 }, { c: '#fbf5b7', p: 1.0 } ],
+            pastel: [ { c: '#ffb3ba', p: 0.0 }, { c: '#ffdfba', p: 0.25 }, { c: '#ffffba', p: 0.5 }, { c: '#baffc9', p: 0.75 }, { c: '#bae1ff', p: 1.0 } ],
+            monochrome: [ { c: '#000000', p: 0.0 }, { c: '#555555', p: 0.33 }, { c: '#aaaaaa', p: 0.66 }, { c: '#ffffff', p: 1.0 } ],
+            neon: [ { c: '#00ffff', p: 0.0 }, { c: '#ff00ff', p: 0.5 }, { c: '#00ff00', p: 1.0 } ],
+            emerald: [ { c: '#022b3a', p: 0.0 }, { c: '#1f7a8c', p: 0.33 }, { c: '#bfdbf7', p: 0.66 }, { c: '#e1e5f2', p: 1.0 } ],
+            twilight: [ { c: '#140f2d', p: 0.0 }, { c: '#322a60', p: 0.33 }, { c: '#9a3c75', p: 0.66 }, { c: '#f08b65', p: 1.0 } ],
+            candy: [ { c: '#ff9a9e', p: 0.0 }, { c: '#fecfef', p: 0.5 }, { c: '#a1c4fd', p: 1.0 } ]
         };
-        if (stop1 && stop2) {
-            colInput1.addEventListener('change', () => saveHistory()); colInput1.addEventListener('input', (e) => { state.colorNear = e.target.value; updateGradientUI(); });
-            colInput2.addEventListener('change', () => saveHistory()); colInput2.addEventListener('input', (e) => { state.colorFar = e.target.value; updateGradientUI(); });
-            const handleDrag = (handle, isStart) => {
-                handle.addEventListener('mousedown', (e) => { e.preventDefault(); recordDragStart(); const onMove = (ev) => { const rect = gradBar.getBoundingClientRect(); let pct = (ev.clientX - rect.left) / rect.width; pct = clamp(pct, 0, 1); if (isStart) { if (pct > state.gradEnd - 0.05) pct = state.gradEnd - 0.05; state.gradStart = pct; } else { if (pct < state.gradStart + 0.05) pct = state.gradStart + 0.05; state.gradEnd = pct; } updateGradientUI(); }; const onUp = () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); recordDragEnd(); }; window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp); });
-            };
-            handleDrag(stop1, true); handleDrag(stop2, false); updateGradientUI();
+
+        const gradPresets = document.getElementById('gradient-presets');
+        if (gradPresets) {
+            gradPresets.addEventListener('change', (e) => {
+                const val = e.target.value;
+                if (val !== 'custom' && colorPresets[val]) {
+                    saveHistory();
+                    state.colorStops = JSON.parse(JSON.stringify(colorPresets[val]));
+                    if (window.updateGradientEditorUI) window.updateGradientEditorUI();
+                }
+            });
         }
+
+        const gradStopsArea = document.getElementById('grad-stops-area');
+        const gradCanvas = document.getElementById('grad-canvas');
+        const gradCtx = gradCanvas ? gradCanvas.getContext('2d', { willReadFrequently: true }) : null;
+
+        function updateGradientTexture() {
+            if (!gradCtx || !state.colorStops || state.colorStops.length === 0) return;
+            const w = gradCanvas.width;
+            gradCtx.clearRect(0, 0, w, 1);
+            const grad = gradCtx.createLinearGradient(0, 0, w, 0);
+            state.colorStops.forEach(stop => grad.addColorStop(stop.p, stop.c));
+            gradCtx.fillStyle = grad;
+            gradCtx.fillRect(0, 0, w, 1);
+            
+            if (!window.gradTex) {
+                window.gradTex = new THREE.CanvasTexture(gradCanvas);
+            } else {
+                window.gradTex.needsUpdate = true;
+            }
+            updateMaterialUniforms();
+            if (state.svgPreview) disableSVGPreview();
+        }
+
+        window.updateGradientEditorUI = function() {
+            if (!state.colorStops) {
+                state.colorStops = [ { c: state.colorNear || '#0000ff', p: state.gradStart !== undefined ? state.gradStart : 0.0 }, { c: state.colorFar || '#ff0000', p: state.gradEnd !== undefined ? state.gradEnd : 1.0 } ];
+            }
+            if (gradStopsArea) {
+                gradStopsArea.innerHTML = '';
+                state.colorStops.forEach((stop, i) => {
+                    const el = document.createElement('div');
+                    el.className = 'grad-stop';
+                    el.style.left = `${stop.p * 100}%`;
+                    el.style.backgroundColor = stop.c;
+                    
+                    const inp = document.createElement('input');
+                    inp.type = 'color';
+                    inp.value = stop.c;
+                    inp.addEventListener('input', (e) => {
+                        stop.c = e.target.value;
+                        el.style.backgroundColor = stop.c;
+                        if (gradPresets) gradPresets.value = 'custom';
+                        updateGradientTexture();
+                    });
+                    inp.addEventListener('change', () => saveHistory());
+                    el.appendChild(inp);
+
+                    el.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        if (e.target !== el && e.target !== inp) return;
+                        let startY = e.clientY;
+                        recordDragStart();
+                        const onMove = (ev) => {
+                            if (ev.clientY - startY > 30 && state.colorStops.length > 2) {
+                                state.colorStops.splice(i, 1);
+                                if (gradPresets) gradPresets.value = 'custom';
+                                window.updateGradientEditorUI();
+                                window.removeEventListener('mousemove', onMove);
+                                window.removeEventListener('mouseup', onUp);
+                                return;
+                            }
+                            const rect = gradStopsArea.getBoundingClientRect();
+                            let pct = (ev.clientX - rect.left) / rect.width;
+                            stop.p = Math.max(0, Math.min(1, pct));
+                            state.colorStops.sort((a,b) => a.p - b.p);
+                            el.style.left = `${stop.p * 100}%`;
+                            if (gradPresets) gradPresets.value = 'custom';
+                            updateGradientTexture();
+                        };
+                        const onUp = () => {
+                            window.removeEventListener('mousemove', onMove);
+                            window.removeEventListener('mouseup', onUp);
+                            recordDragEnd();
+                            window.updateGradientEditorUI();
+                        };
+                        window.addEventListener('mousemove', onMove);
+                        window.addEventListener('mouseup', onUp);
+                    });
+                    gradStopsArea.appendChild(el);
+                });
+            }
+            updateGradientTexture();
+        };
+
+        const gradEditor = document.getElementById('grad-editor');
+        if (gradEditor) {
+            gradEditor.addEventListener('click', (e) => {
+                if (e.target.closest('.grad-stop')) return;
+                const rect = gradStopsArea.getBoundingClientRect();
+                let pct = (e.clientX - rect.left) / rect.width;
+                pct = Math.max(0, Math.min(1, pct));
+                const px = Math.floor(pct * 255);
+                const data = gradCtx.getImageData(px, 0, 1, 1).data;
+                const hex = '#' + [data[0], data[1], data[2]].map(x => x.toString(16).padStart(2, '0')).join('');
+                
+                saveHistory();
+                state.colorStops.push({ c: hex, p: pct });
+                state.colorStops.sort((a,b) => a.p - b.p);
+                if (gradPresets) gradPresets.value = 'custom';
+                window.updateGradientEditorUI();
+            });
+        }
+        
+        // Ensure UI generates initial texture on load
+        if (window.updateGradientEditorUI) window.updateGradientEditorUI();
 
         document.getElementById('grad-mode').addEventListener('change', (e) => {
             saveHistory();
@@ -1493,6 +1646,130 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         syncInput('grad-rot-x', 'val-grad-rot-x', (v) => { state.gradRot.x = parseFloat(v); updateMaterialUniforms(); });
         syncInput('grad-rot-y', 'val-grad-rot-y', (v) => { state.gradRot.y = parseFloat(v); updateMaterialUniforms(); });
+
+
+        // --- Line Gradient UI ---
+        const lineGradPresets = document.getElementById('line-gradient-presets');
+        if (lineGradPresets) {
+            lineGradPresets.addEventListener('change', (e) => {
+                const val = e.target.value;
+                if (colorPresets[val]) {
+                    saveHistory();
+                    state.lineGradient.stops = JSON.parse(JSON.stringify(colorPresets[val]));
+                    if (window.updateLineGradientEditorUI) window.updateLineGradientEditorUI();
+                }
+            });
+        }
+
+        const lineGradStopsArea = document.getElementById('line-grad-stops-area');
+        const lineGradCanvas = document.getElementById('line-grad-canvas');
+        const lineGradCtx = lineGradCanvas ? lineGradCanvas.getContext('2d', { willReadFrequently: true }) : null;
+
+        function updateLineGradientTexture() {
+            if (!lineGradCtx || !state.lineGradient.stops || state.lineGradient.stops.length === 0) return;
+            const w = lineGradCanvas.width;
+            lineGradCtx.clearRect(0, 0, w, 1);
+            const grad = lineGradCtx.createLinearGradient(0, 0, w, 0);
+            state.lineGradient.stops.forEach(stop => grad.addColorStop(stop.p, stop.c));
+            lineGradCtx.fillStyle = grad;
+            lineGradCtx.fillRect(0, 0, w, 1);
+            
+            if (!window.lineGradTex) {
+                window.lineGradTex = new THREE.CanvasTexture(lineGradCanvas);
+            } else {
+                window.lineGradTex.needsUpdate = true;
+            }
+            updateMaterialUniforms();
+            if (state.svgPreview) disableSVGPreview();
+        }
+
+        window.updateLineGradientEditorUI = function() {
+            if (!state.lineGradient.stops || state.lineGradient.stops.length === 0) {
+                state.lineGradient.stops = [ { c: '#0000ff', p: 0.0 }, { c: '#ff0000', p: 1.0 } ];
+            }
+            if (lineGradStopsArea) {
+                lineGradStopsArea.innerHTML = '';
+                state.lineGradient.stops.forEach((stop, i) => {
+                    const el = document.createElement('div');
+                    el.className = 'grad-stop';
+                    el.style.left = `${stop.p * 100}%`;
+                    el.style.backgroundColor = stop.c;
+                    
+                    const inp = document.createElement('input');
+                    inp.type = 'color';
+                    inp.value = stop.c;
+                    inp.addEventListener('input', (e) => {
+                        stop.c = e.target.value;
+                        el.style.backgroundColor = stop.c;
+                        if (lineGradPresets) lineGradPresets.value = 'custom';
+                        updateLineGradientTexture();
+                    });
+                    inp.addEventListener('change', () => saveHistory());
+                    el.appendChild(inp);
+
+                    el.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        if (e.target !== el && e.target !== inp) return;
+                        let startY = e.clientY;
+                        recordDragStart();
+                        const onMove = (ev) => {
+                            if (ev.clientY - startY > 30 && state.lineGradient.stops.length > 2) {
+                                state.lineGradient.stops.splice(i, 1);
+                                if (lineGradPresets) lineGradPresets.value = 'custom';
+                                window.updateLineGradientEditorUI();
+                                window.removeEventListener('mousemove', onMove);
+                                window.removeEventListener('mouseup', onUp);
+                                return;
+                            }
+                            const rect = lineGradStopsArea.getBoundingClientRect();
+                            let pct = (ev.clientX - rect.left) / rect.width;
+                            stop.p = Math.max(0, Math.min(1, pct));
+                            state.lineGradient.stops.sort((a,b) => a.p - b.p);
+                            el.style.left = `${stop.p * 100}%`;
+                            if (lineGradPresets) lineGradPresets.value = 'custom';
+                            updateLineGradientTexture();
+                        };
+                        const onUp = () => {
+                            window.removeEventListener('mousemove', onMove);
+                            window.removeEventListener('mouseup', onUp);
+                            recordDragEnd();
+                            window.updateLineGradientEditorUI();
+                        };
+                        window.addEventListener('mousemove', onMove);
+                        window.addEventListener('mouseup', onUp);
+                    });
+                    lineGradStopsArea.appendChild(el);
+                });
+            }
+            updateLineGradientTexture();
+        };
+
+        const lineGradEditor = document.getElementById('line-grad-editor');
+        if (lineGradEditor) {
+            lineGradEditor.addEventListener('click', (e) => {
+                if (e.target.closest('.grad-stop')) return;
+                const rect = lineGradStopsArea.getBoundingClientRect();
+                let pct = (e.clientX - rect.left) / rect.width;
+                pct = Math.max(0, Math.min(1, pct));
+                const px = Math.floor(pct * 255);
+                const data = lineGradCtx.getImageData(px, 0, 1, 1).data;
+                const hex = '#' + [data[0], data[1], data[2]].map(x => x.toString(16).padStart(2, '0')).join('');
+                
+                saveHistory();
+                state.lineGradient.stops.push({ c: hex, p: pct });
+                state.lineGradient.stops.sort((a,b) => a.p - b.p);
+                if (lineGradPresets) lineGradPresets.value = 'custom';
+                window.updateLineGradientEditorUI();
+            });
+        }
+        if (window.updateLineGradientEditorUI) window.updateLineGradientEditorUI();
+        
+        document.getElementById('line-gradient-axis').addEventListener('change', (e) => {
+            saveHistory();
+            state.lineGradient.axis = e.target.value;
+            updateGeometry();
+            if(state.svgPreview) disableSVGPreview();
+        });
 
 
         document.getElementById('btn-reset-transform').addEventListener('click', (e) => { e.stopPropagation(); saveHistory(); state.objRot = { x: 0, y: 0, z: 0 }; document.getElementById('obj-rot-x').value = 0; document.getElementById('obj-rot-y').value = 0; document.getElementById('obj-rot-z').value = 0; updateGeometry(); });
@@ -1679,6 +1956,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setCheck('hl-invert', state.hiddenSettings.invert);
 
         setCheck('use-z-color', state.zDepth.color); setDisplay('z-color-controls', state.zDepth.color);
+        setCheck('use-line-gradient', state.lineGradient.enabled); setDisplay('line-gradient-controls', state.lineGradient.enabled);
         setCheck('use-z-opacity', state.zDepth.opacity); setDisplay('z-opacity-controls', state.zDepth.opacity);
         setCheck('use-z-dof', state.zDepth.dof); setDisplay('z-dof-controls', state.zDepth.dof);
         setCheck('use-z-size', state.zDepth.size); setDisplay('z-size-controls', state.zDepth.size);
@@ -1687,10 +1965,8 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal('z-size-far', state.zSize.far); setVal('val-z-size-far', state.zSize.far);
         setVal('dof-focus', state.dof.focus); setVal('val-dof-focus', state.dof.focus); setVal('dof-intensity', state.dof.intensity); setVal('val-dof-intensity', state.dof.intensity); setVal('dof-aperture', state.dof.aperture); setVal('val-dof-aperture', state.dof.aperture);
         if (typeof curveEditor !== 'undefined') { curveEditor.localOp = undefined; curveEditor.localSize = undefined; }
-        setCheck('dof-ignore-near', state.dof.ignoreNear); setVal('input-col-near', state.colorNear); setVal('input-col-far', state.colorFar);
-        
-        const stop1 = document.getElementById('stop-1'), stop2 = document.getElementById('stop-2'), gradBar = document.getElementById('grad-bar');
-        if (stop1 && stop2 && gradBar) { const p1 = state.gradStart * 100, p2 = state.gradEnd * 100; stop1.style.left = `${p1}%`; stop2.style.left = `${p2}%`; gradBar.style.background = `linear-gradient(90deg, ${state.colorNear} 0%, ${state.colorNear} ${p1}%, ${state.colorFar} ${p2}%, ${state.colorFar} 100%)`; }
+        setCheck('dof-ignore-near', state.dof.ignoreNear); 
+        if (window.updateGradientEditorUI) window.updateGradientEditorUI();
         const opStop1 = document.getElementById('op-stop-1'), opStop2 = document.getElementById('op-stop-2'), opBar = document.getElementById('op-grad-bar');
         const opGradStartVal = state.opGradStart !== undefined ? state.opGradStart : 0.0;
         const opGradEndVal = state.opGradEnd !== undefined ? state.opGradEnd : 1.0;
@@ -1801,7 +2077,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const mathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const atan2 = Math.atan2; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const sign = Math.sign; const hypot = Math.hypot; const random = Math.random; const a = ${state.mathVars.a}; const b = ${state.mathVars.b}; const c = ${state.mathVars.c};`;
                 const errEl = document.getElementById('math-error');
                 let func; try {
-                    func = new Function('x', 'z', mathContext + 'return ' + state.mathFormula + ';');
+                    if (!isValidFormula(state.mathFormula)) throw new Error('Invalid formula');
+                    func = new Function('x', 'z', mathContext + 'return ' + state.mathFormula + ';\n//# sourceURL=MathFormula.js');
                     if(errEl) errEl.style.display = 'none';
                 } catch(e) {
                     if(errEl) errEl.style.display = 'block';
@@ -1818,9 +2095,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const pMathContext = `const sin = Math.sin; const cos = Math.cos; const tan = Math.tan; const asin = Math.asin; const acos = Math.acos; const atan = Math.atan; const atan2 = Math.atan2; const abs = Math.abs; const sqrt = Math.sqrt; const cbrt = Math.cbrt; const pow = Math.pow; const exp = Math.exp; const log = Math.log; const max = Math.max; const min = Math.min; const PI = Math.PI; const E = Math.E; const ceil = Math.ceil; const floor = Math.floor; const round = Math.round; const sign = Math.sign; const hypot = Math.hypot; const random = Math.random;`;
                 const errEl = document.getElementById('param-error');
                 let funcX, funcY, funcZ; try {
-                    funcX = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.x + ';');
-                    funcY = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.y + ';');
-                    funcZ = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.z + ';');
+                    if (!isValidFormula(state.parametricFormulas.x) || !isValidFormula(state.parametricFormulas.y) || !isValidFormula(state.parametricFormulas.z)) throw new Error('Invalid formula');
+                    funcX = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.x + ';\n//# sourceURL=ParametricX.js');
+                    funcY = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.y + ';\n//# sourceURL=ParametricY.js');
+                    funcZ = new Function('u', 'v', pMathContext + 'return ' + state.parametricFormulas.z + ';\n//# sourceURL=ParametricZ.js');
                     if(errEl) errEl.style.display = 'none';
                 } catch(e) {
                     if(errEl) errEl.style.display = 'block';
@@ -1875,7 +2153,8 @@ document.addEventListener('DOMContentLoaded', () => {
             default: if (params.length >= 2) { wSegs = params[params.length-2]; hSegs = params[params.length-1]; } else { wSegs = 10; hSegs = 10; } break;
         }
         const pos = geometry.attributes.position, vertArray = [], rawSplineGroups = [];
-        const pushSegments = (pts) => { for(let i=0; i<pts.length-1; i++) { vertArray.push(pts[i].x, pts[i].y, pts[i].z); vertArray.push(pts[i+1].x, pts[i+1].y, pts[i+1].z); } };
+        const lineValueArray = [];
+        const pushSegments = (pts, lineVal = -1.0) => { for(let i=0; i<pts.length-1; i++) { vertArray.push(pts[i].x, pts[i].y, pts[i].z); vertArray.push(pts[i+1].x, pts[i+1].y, pts[i+1].z); lineValueArray.push(lineVal, lineVal); } };
 
         if (type === 'cube') {
             const sx = params[3], sy = params[4], sz = params[5];
@@ -1883,19 +2162,19 @@ document.addEventListener('DOMContentLoaded', () => {
             let offset = 0;
             faces.forEach((f, i) => {
                 const uSegs = f.u, vSegs = f.v, groupSplines = [];
-                if (state.gridUV.u) { for (let y = 0; y <= vSegs; y++) { const pts = []; for (let x = 0; x <= uSegs; x++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints(uSegs * subdivision); pushSegments(sp); groupSplines.push({ points: pts, closed: false, direction: 'u' }); } }
-                if (state.gridUV.v) { for (let x = 0; x <= uSegs; x++) { const pts = []; for (let y = 0; y <= vSegs; y++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints(vSegs * subdivision); pushSegments(sp); groupSplines.push({ points: pts, closed: false, direction: 'v' }); } }
+                if (state.gridUV.u) { for (let y = 0; y <= vSegs; y++) { const pts = []; for (let x = 0; x <= uSegs; x++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints(uSegs * subdivision); let lineVal = (state.lineGradient.axis === 'u' || state.lineGradient.axis === 'both') ? (vSegs > 0 ? y / vSegs : 0) : -1.0; pushSegments(sp, lineVal); groupSplines.push({ points: pts, closed: false, direction: 'u', lineValue: lineVal }); } }
+                if (state.gridUV.v) { for (let x = 0; x <= uSegs; x++) { const pts = []; for (let y = 0; y <= vSegs; y++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints(vSegs * subdivision); let lineVal = (state.lineGradient.axis === 'v' || state.lineGradient.axis === 'both') ? (uSegs > 0 ? x / uSegs : 0) : -1.0; pushSegments(sp, lineVal); groupSplines.push({ points: pts, closed: false, direction: 'v', lineValue: lineVal }); } }
                 rawSplineGroups.push({ name: `Face_${i}_${f.name}`, splines: groupSplines }); offset += (uSegs + 1) * (vSegs + 1);
             });
         } else {
             const expected = (wSegs + 1) * (hSegs + 1);
             if (type !== 'landscape' && !state.spline.force && pos.count !== expected) { console.warn('Spline generation skipped: Vertex count mismatch.', type, pos.count, expected); return createQuadWireframe(geometry); }
             const groupSplines = [];
-            if (state.gridUV.u) { for (let y = 0; y <= hSegs; y++) { const points = []; for (let x = 0; x <= wSegs; x++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } let isClosed = closedU; if (isClosed) { if (points.length > 1 && points[0].distanceTo(points[points.length-1]) < 0.0001) points.pop(); } if(points.length < 2) continue; const curve = new THREE.CatmullRomCurve3(points); curve.closed = isClosed; const splinePoints = curve.getPoints(wSegs * subdivision); pushSegments(splinePoints); groupSplines.push({ points: [...points], closed: isClosed, direction: 'u' }); } }
-            if (state.gridUV.v) { for (let x = 0; x <= wSegs; x++) { const points = []; for (let y = 0; y <= hSegs; y++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } let isClosed = closedV; if (isClosed) { if (points.length > 1 && points[0].distanceTo(points[points.length-1]) < 0.0001) points.pop(); } if(points.length < 2) continue; const curve = new THREE.CatmullRomCurve3(points); curve.closed = isClosed; const splinePoints = curve.getPoints(hSegs * subdivision); pushSegments(splinePoints); groupSplines.push({ points: [...points], closed: isClosed, direction: 'v' }); } }
+            if (state.gridUV.u) { for (let y = 0; y <= hSegs; y++) { const points = []; for (let x = 0; x <= wSegs; x++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } let isClosed = closedU; if (isClosed) { if (points.length > 1 && points[0].distanceTo(points[points.length-1]) < 0.0001) points.pop(); } if(points.length < 2) continue; const curve = new THREE.CatmullRomCurve3(points); curve.closed = isClosed; const splinePoints = curve.getPoints(wSegs * subdivision); let lineVal = (state.lineGradient.axis === 'u' || state.lineGradient.axis === 'both') ? (hSegs > 0 ? y / hSegs : 0) : -1.0; pushSegments(splinePoints, lineVal); groupSplines.push({ points: [...points], closed: isClosed, direction: 'u', lineValue: lineVal }); } }
+            if (state.gridUV.v) { for (let x = 0; x <= wSegs; x++) { const points = []; for (let y = 0; y <= hSegs; y++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } let isClosed = closedV; if (isClosed) { if (points.length > 1 && points[0].distanceTo(points[points.length-1]) < 0.0001) points.pop(); } if(points.length < 2) continue; const curve = new THREE.CatmullRomCurve3(points); curve.closed = isClosed; const splinePoints = curve.getPoints(hSegs * subdivision); let lineVal = (state.lineGradient.axis === 'v' || state.lineGradient.axis === 'both') ? (wSegs > 0 ? x / wSegs : 0) : -1.0; pushSegments(splinePoints, lineVal); groupSplines.push({ points: [...points], closed: isClosed, direction: 'v', lineValue: lineVal }); } }
             rawSplineGroups.push({ name: 'Main', splines: groupSplines });
         }
-        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(vertArray, 3)); geo.userData.splineGroups = rawSplineGroups; return geo;
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(vertArray, 3)); geo.setAttribute('lineValue', new THREE.Float32BufferAttribute(lineValueArray, 1)); geo.userData.splineGroups = rawSplineGroups; return geo;
     }
 
     function createOverlappingCirclesWireframe(params) {
@@ -2082,6 +2361,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.geoType === 'landscape') isSpline = true;
             if (sphereTypes.includes(state.geoType) && state.geoType !== 'sphere') isSpline = false; 
             if (state.geoType === 'sphere') isSpline = true; 
+            
+            const supportsSplines = ['grid', 'cube', 'math', 'parametric', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'landscape'].includes(state.geoType);
+            if (state.lineGradient.enabled && supportsSplines) isSpline = true;
 
             let geoSolid;
             if (isHiddenLine && isSpline && state.solidSubdiv > 1) {
@@ -2099,19 +2381,24 @@ document.addEventListener('DOMContentLoaded', () => {
             let wireGeo;
             if (state.style === 'halftone') {
                 wireGeo = new THREE.BufferGeometry();
-            } else if (state.style === 'dots' || state.style === 'dots-solid') {
-                wireGeo = geoWire.clone();
-            } else if (state.style === 'triangles') {
-                wireGeo = new THREE.WireframeGeometry(geoWire);
             } else if (state.geoType === 'sphere-circles') {
                 wireGeo = createOverlappingCirclesWireframe(state.geoParams);
                 wireGeo.applyMatrix4(matrix);
                 applyDeformations(wireGeo, { skipNormals: true });
-            } else if (isSpline) {
+            } else if (isSpline && (state.style !== 'dots' && state.style !== 'dots-solid' && state.style !== 'triangles' || state.lineGradient.enabled)) {
                 wireGeo = createSplineWireframe(geoWire, state.geoParams, state.geoType, state.spline.subdiv);
                 anySplineCount = true;
+            } else if (state.style === 'dots' || state.style === 'dots-solid') {
+                wireGeo = geoWire.clone();
+            } else if (state.style === 'triangles') {
+                wireGeo = new THREE.WireframeGeometry(geoWire);
             } else {
                 wireGeo = createQuadWireframe(geoWire);
+            }
+
+            if (wireGeo && !wireGeo.attributes.lineValue && wireGeo.attributes.position) {
+                const count = wireGeo.attributes.position.count;
+                wireGeo.setAttribute('lineValue', new THREE.Float32BufferAttribute(new Float32Array(count).fill(-1.0), 1));
             }
 
             mergedGeoWire.push(wireGeo);
@@ -2125,8 +2412,20 @@ document.addEventListener('DOMContentLoaded', () => {
         state.parametricFormulas = originalParametricFormulas;
         state.landscape = originalLandscape;
 
-        let finalGeoWire = mergedGeoWire.length > 0 ? THREE.BufferGeometryUtils.mergeBufferGeometries(mergedGeoWire) : new THREE.BufferGeometry();
-        let finalGeoSolid = mergedGeoSolid.length > 0 ? THREE.BufferGeometryUtils.mergeBufferGeometries(mergedGeoSolid) : new THREE.BufferGeometry();
+        let finalGeoWire = mergedGeoWire.length > 1 ? THREE.BufferGeometryUtils.mergeBufferGeometries(mergedGeoWire) : (mergedGeoWire.length === 1 ? mergedGeoWire[0] : new THREE.BufferGeometry());
+        
+        let combinedSplineGroups = [];
+        mergedGeoWire.forEach(geo => {
+            if (geo.userData && geo.userData.splineGroups) {
+                combinedSplineGroups.push(...geo.userData.splineGroups);
+            }
+        });
+        if (combinedSplineGroups.length > 0) {
+            finalGeoWire.userData = finalGeoWire.userData || {};
+            finalGeoWire.userData.splineGroups = combinedSplineGroups;
+        }
+
+        let finalGeoSolid = mergedGeoSolid.length > 1 ? THREE.BufferGeometryUtils.mergeBufferGeometries(mergedGeoSolid) : (mergedGeoSolid.length === 1 ? mergedGeoSolid[0] : new THREE.BufferGeometry());
 
         mainMeshGroup = new THREE.Group();
         mainMeshGroup.rotation.set(THREE.MathUtils.degToRad(state.objRot.x), THREE.MathUtils.degToRad(state.objRot.y), THREE.MathUtils.degToRad(state.objRot.z));
@@ -2736,6 +3035,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- DEPTH ANALYSIS (skip if no zDepth features are enabled for performance) ---
         let minVal = Infinity, maxVal = -Infinity, safeRange = 1.0, minZ = 0, maxZ = 1, safeZRange = 1.0, gradDir = null;
+        let dofMinVal = Infinity, dofMaxVal = -Infinity, safeDofRange = 1.0;
         let opMinZ = 0, opMaxZ = 1, safeOpZRange = 1.0;
         const useZDepth = state.zDepth.color || state.zDepth.opacity || state.zDepth.dof || state.zDepth.size;
         const useDOF = state.zDepth.dof;
@@ -2753,11 +3053,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             for (let i=0; i<pos.count; i+=step) { 
                 vTemp.fromBufferAttribute(pos, i).applyMatrix4(matWorld); 
-                const val = (state.gradMode === 'directional') ? vTemp.dot(gradDir) : vTemp.distanceTo(camPos);
+                const distVal = vTemp.distanceTo(camPos);
+                if (distVal < dofMinVal) dofMinVal = distVal;
+                if (distVal > dofMaxVal) dofMaxVal = distVal;
+                const val = (state.gradMode === 'directional') ? vTemp.dot(gradDir) : distVal;
                 if (val < minVal) minVal = val; if (val > maxVal) maxVal = val; 
             }
             const range = maxVal - minVal; 
             safeRange = range < 0.01 ? 1.0 : range; 
+            const dofRange = dofMaxVal - dofMinVal;
+            safeDofRange = dofRange < 0.01 ? 1.0 : dofRange;
             const opStart = state.opGradStart !== undefined ? state.opGradStart : 0.0;
             const opEnd = state.opGradEnd !== undefined ? state.opGradEnd : 1.0;
             minZ = minVal + (range * state.gradStart); 
@@ -2772,16 +3077,52 @@ document.addEventListener('DOMContentLoaded', () => {
         } 
 
         // Style Helper
-        const getStyle = (dist, worldPt) => {
-            let col = (state.svgPreview && !state.zDepth.color) ? '#f1c40f' : state.baseColor; 
+        const getStyle = (dist, worldPt, lineVal = -1.0) => {
+            let col = (state.svgPreview && !state.zDepth.color && !state.lineGradient.enabled) ? '#f1c40f' : state.baseColor; 
             let op = 1.0; let scale = 1.0;
+            
+            if (state.lineGradient.enabled && lineVal >= 0.0) {
+                if (state.lineGradient.stops && state.lineGradient.stops.length > 0) {
+                    let c = state.lineGradient.stops[0].c;
+                    for (let i = 0; i < state.lineGradient.stops.length - 1; i++) {
+                        const s1 = state.lineGradient.stops[i];
+                        const s2 = state.lineGradient.stops[i+1];
+                        if (lineVal >= s1.p && lineVal <= s2.p) {
+                            const localT = (lineVal - s1.p) / (s2.p - s1.p);
+                            c = '#' + new THREE.Color(s1.c).lerp(new THREE.Color(s2.c), localT).getHexString();
+                            break;
+                        } else if (lineVal > s2.p) {
+                            c = s2.c;
+                        }
+                    }
+                    col = c;
+                }
+            }
             
             // Only calculate zDepth values if at least one zDepth feature is enabled (for performance)
             if (useZDepth) {
                 const metric = (state.gradMode === 'directional') ? worldPt.dot(gradDir) : dist;
                 const t = Math.max(0.0, Math.min(1.0, (metric - minZ) / safeZRange));
                 
-                if (state.zDepth.color) col = '#' + new THREE.Color(state.colorNear).lerp(new THREE.Color(state.colorFar), t).getHexString();
+                if (state.zDepth.color) {
+                    if (state.colorStops && state.colorStops.length > 0) {
+                        let c = state.colorStops[0].c;
+                        for (let i = 0; i < state.colorStops.length - 1; i++) {
+                            const s1 = state.colorStops[i];
+                            const s2 = state.colorStops[i+1];
+                            if (t >= s1.p && t <= s2.p) {
+                                const localT = (t - s1.p) / (s2.p - s1.p);
+                                c = '#' + new THREE.Color(s1.c).lerp(new THREE.Color(s2.c), localT).getHexString();
+                                break;
+                            } else if (t > s2.p) {
+                                c = s2.c;
+                            }
+                        }
+                        col = c;
+                    } else {
+                        col = '#' + new THREE.Color(state.colorNear).lerp(new THREE.Color(state.colorFar), t).getHexString();
+                    }
+                }
                 if (state.zDepth.opacity) {
                     const opT = Math.max(0.0, Math.min(1.0, (metric - opMinZ) / safeOpZRange));
                     op *= (1.0 - opT);
@@ -2793,7 +3134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 if (useDOF) { 
-                    let distDOF = (dist - minVal) / safeRange;
+                    let distDOF = (dist - dofMinVal) / safeDofRange;
                     distDOF -= state.dof.focus; 
                     if (state.dof.ignoreNear && distDOF < 0) distDOF = 0; 
                     const blurRaw = Math.min(1.0, Math.abs(distDOF) * state.dof.intensity); 
@@ -2819,7 +3160,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const rawSegments = [];
         const allSegments = [];
 
-        const collectLine = (pA, pB, dist, worldMid, isSpline = false) => {
+        const collectLine = (pA, pB, dist, worldMid, isSpline = false, lineVal = -1.0) => {
             // 1. Min Length Check (skip if minLen is 0 for performance)
             const minLen = state.hiddenSettings.minLen || 0;
             if (minLen > 0) {
@@ -2829,7 +3170,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // 2. Style Calculation
-            const style = getStyle(dist, worldMid);
+            const style = getStyle(dist, worldMid, lineVal);
             if (style.op <= 0.001) return;
 
             rawSegments.push({ p1: {x: pA.x, y: pA.y}, p2: {x: pB.x, y: pB.y}, z: dist, style: style, isSpline: isSpline });
@@ -2837,7 +3178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // --- RECURSIVE SUBDIVISION ---
-        function traceSegmentRecursive(pStart, pEnd, depth, isSpline = false) {
+        function traceSegmentRecursive(pStart, pEnd, depth, isSpline = false, lineVal = -1.0) {
             const wStart = pStart.clone().applyMatrix4(matWorld);
             const wEnd = pEnd.clone().applyMatrix4(matWorld);
             const dStart = camPos.distanceTo(wStart);
@@ -2858,7 +3199,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          c1.z < -near && c2.z < -near) {
                          
                          const wMid = wStart.clone().lerp(wEnd, 0.5);
-                         collectLine(scr1, scr2, (dStart+dEnd)/2, wMid, isSpline);
+                         collectLine(scr1, scr2, (dStart+dEnd)/2, wMid, isSpline, lineVal);
                      }
                 } else if (depth < 2) {
                      // Both hidden, but might be tunneling? Check mid
@@ -2867,8 +3208,8 @@ document.addEventListener('DOMContentLoaded', () => {
                      const dMid = camPos.distanceTo(wMid);
                      const visMid = !isClipped(wMid) && (checkOcclusion(wMid, dMid) === state.hiddenSettings.invert);
                      if (visMid) {
-                         traceSegmentRecursive(pStart, mid, depth + 1, isSpline);
-                         traceSegmentRecursive(mid, pEnd, depth + 1, isSpline);
+                         traceSegmentRecursive(pStart, mid, depth + 1, isSpline, lineVal);
+                         traceSegmentRecursive(mid, pEnd, depth + 1, isSpline, lineVal);
                      }
                 }
                 return;
@@ -2880,20 +3221,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     const wMid = mid.clone().applyMatrix4(matWorld);
                     const c1 = wStart.clone().applyMatrix4(matView);
                     const c2 = wMid.clone().applyMatrix4(matView); 
-                    collectLine(project(c1), project(c2), dStart, wMid, isSpline);
+                    collectLine(project(c1), project(c2), dStart, wMid, isSpline, lineVal);
                 } else if (visEnd) {
                     const mid = pStart.clone().lerp(pEnd, 0.5);
                     const wMid = mid.clone().applyMatrix4(matWorld);
                     const c1 = wMid.clone().applyMatrix4(matView);
                     const c2 = wEnd.clone().applyMatrix4(matView);
-                    collectLine(project(c1), project(c2), dEnd, wMid, isSpline);
+                    collectLine(project(c1), project(c2), dEnd, wMid, isSpline, lineVal);
                 }
                 return;
             }
             
             const mid = pStart.clone().lerp(pEnd, 0.5);
-            traceSegmentRecursive(pStart, mid, depth + 1, isSpline);
-            traceSegmentRecursive(mid, pEnd, depth + 1, isSpline);
+            traceSegmentRecursive(pStart, mid, depth + 1, isSpline, lineVal);
+            traceSegmentRecursive(mid, pEnd, depth + 1, isSpline, lineVal);
         }
 
         let output = '';
@@ -2922,6 +3263,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     for (let i = 0; i < splines.length; i++) {
                         await smartYield(); 
                         const splineData = splines[i], rawPoints = [...splineData.points];
+                        const lineVal = splineData.lineValue;
                         if (splineData.closed && rawPoints.length > 2) rawPoints.push(rawPoints[0].clone());
                         
                         const worldPoints = rawPoints.map(p => p.clone().applyMatrix4(matWorld)); 
@@ -2961,7 +3303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             if (currentPath.length < 2) { currentPath = []; return; }
                             const avgDist = currentPath.reduce((acc, p) => acc + p.dist, 0) / currentPath.length; 
                             const centerIdx = Math.floor(currentPath.length / 2);
-                            const { col, op, scale } = getStyle(avgDist, currentPath[centerIdx].vWorld); 
+                            const { col, op, scale } = getStyle(avgDist, currentPath[centerIdx].vWorld, splineData.lineValue);
                             
                             const sw = state.strokeWidth * scale;
                             if (op <= 0.001) { currentPath = []; return; }
@@ -3024,7 +3366,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                          const s1 = processed[k], s2 = processed[k+1];
                                          if (isClipped(s1.w) || isClipped(s2.w)) continue;
                                          if (s1.out && s2.out) continue;
-                                         collectLine(s1.scr, s2.scr, (s1.dist + s2.dist) / 2, _mid.copy(s1.w).lerp(s2.w, 0.5), true);
+                                         collectLine(s1.scr, s2.scr, (s1.dist + s2.dist) / 2, _mid.copy(s1.w).lerp(s2.w, 0.5), true, splineData.lineValue);
                                      }
                                  } else if (!pStart.vis && !pEnd.vis) {
                                      // Block might be hidden or tunneling
@@ -3040,8 +3382,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                              if (s1.vis || s2.vis) {
                                                  const wM = _mid.copy(s1.w).lerp(s2.w, 0.5);
                                                  const dM = (s1.dist + s2.dist) / 2;
-                                                 if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true);
-                                                 else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true);
+                                                 if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
+                                                 else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
                                              }
                                          }
                                      }
@@ -3054,8 +3396,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                          if (s1.vis || s2.vis) {
                                              const wM = _mid.copy(s1.w).lerp(s2.w, 0.5);
                                              const dM = (s1.dist + s2.dist) / 2;
-                                             if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true);
-                                             else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true);
+                                             if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
+                                             else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
                                          }
                                      }
                                  }
@@ -3063,7 +3405,7 @@ document.addEventListener('DOMContentLoaded', () => {
                          } else {
                              // --- STANDARD DENSE PATH (NOW SMOOTH RECURSIVE) ---
                              for(let j=0; j < densePoints.length - 1; j++) {
-                                 traceSegmentRecursive(densePoints[j], densePoints[j+1], 0, true);
+                                 traceSegmentRecursive(densePoints[j], densePoints[j+1], 0, true, splineData.lineValue);
                              }
                          }
 
@@ -3101,21 +3443,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } else if (isDots) {
               const pos = meshWire.geometry.attributes.position, total = pos.count, v1 = new THREE.Vector3();
-               const rnd = (n) => Math.round(n * 1000); const processed = new Set();
-               const dotsArray = [];
+              const lineValAttr = meshWire.geometry.attributes.lineValue;
+               const rnd = (n) => Math.round(n * 1000); 
+               const dotsMap = new Map();
                tickProgress(0, 'Processing Dots...');
                for (let i = 0; i < total; i++) {
                   await smartYield();
                   v1.fromBufferAttribute(pos, i).applyMatrix4(matWorld);
                   if (clipPlane && clipPlane.distanceToPoint(v1) < 0) continue;
-                  const s = `${rnd(v1.x)},${rnd(v1.y)},${rnd(v1.z)}`; if (processed.has(s)) continue; processed.add(s);
-                  const c1 = v1.clone().applyMatrix4(matView); if (c1.z > -near) continue;
+                  let lineVal = -1.0;
+                  if (lineValAttr) lineVal = lineValAttr.getX(i);
+                  const s = `${rnd(v1.x)},${rnd(v1.y)},${rnd(v1.z)}`;
+                  const existing = dotsMap.get(s);
+                  if (!existing || (lineVal >= 0.0 && existing.lineVal < 0.0)) {
+                      dotsMap.set(s, { v: v1.clone(), lineVal: lineVal });
+                  }
+               }
+
+               const dotsArray = [];
+               for (const [s, data] of dotsMap.entries()) {
+                  await smartYield();
+                  const vVec = data.v;
+                  const c1 = vVec.clone().applyMatrix4(matView); if (c1.z > -near) continue;
                   const p = project(c1); 
-                  // Early viewport check BEFORE expensive occlusion check
                   if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) continue;
-                  const dist = camPos.distanceTo(v1);
-                  if (checkOcclusion(v1, dist) === state.hiddenSettings.invert) {
-                      const { col, op, scale } = getStyle(dist, v1);
+                  const dist = camPos.distanceTo(vVec);
+                  if (checkOcclusion(vVec, dist) === state.hiddenSettings.invert) {
+                      const { col, op, scale } = getStyle(dist, vVec, data.lineVal);
                       const r = (state.dotSize * scale) / 2;
                       if(op > 0.001 && r > 0.1) {
                           dotsArray.push({ dist, p, r, col, op });
@@ -3139,6 +3493,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
              // RAW LINES
              const pos = meshWire.geometry.attributes.position;
+             const lineValAttr = meshWire.geometry.attributes.lineValue;
              const total = pos.count / 2;
              
              tickProgress(0, 'Processing Lines...');
@@ -3148,7 +3503,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   _p1.fromBufferAttribute(pos, idx);
                   _p2.fromBufferAttribute(pos, idx+1);
                   
-                  traceSegmentRecursive(_p1, _p2, 0, false);
+                  let lineVal = -1.0;
+                  if (lineValAttr) lineVal = lineValAttr.getX(idx);
+
+                  traceSegmentRecursive(_p1, _p2, 0, false, lineVal);
                   markLineRendered('Processing lines...');
              }
         }
