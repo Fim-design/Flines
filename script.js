@@ -226,7 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let matWireShader = null; 
 
     const presets = [null, null, null, null, null];
-    const sphereTypes = ['sphere', 'sphere-circles', 'icosahedron', 'tetrahedron', 'octahedron', 'dodecahedron'];
+    const sphereTypes = ['sphere', 'sphere-circles', 'sphere-geodesic', 'sphere-spiral', 'sphere-hexagonal', 'sphere-lissajous', 'sphere-voronoi', 'sphere-hopf', 'sphere-diagonal', 'sphere-loxodrome', 'icosahedron', 'tetrahedron', 'octahedron', 'dodecahedron'];
+    const torusTypes = ['torus', 'torus-knot', 'torus-mobius', 'torus-twisted'];
 
     function generateMatcapTexture() {
         const size = 256;
@@ -258,7 +259,22 @@ document.addEventListener('DOMContentLoaded', () => {
         cube: { params: [{ name: 'Width', def: 2, min: 0.1, max: 5, type: 'float', step: 0.1 }, { name: 'Height', def: 2, min: 0.1, max: 5, type: 'float', step: 0.1 }, { name: 'Depth', def: 2, min: 0.1, max: 5, type: 'float', step: 0.1 }, { name: 'Segs X', def: 5, min: 1, max: 20, type: 'int', step: 1 }, { name: 'Segs Y', def: 5, min: 1, max: 20, type: 'int', step: 1 }, { name: 'Segs Z', def: 5, min: 1, max: 20, type: 'int', step: 1 }, { name: 'Spline', def: 1, min: 0, max: 1, type: 'bool', step: 1 }] },
         sphere: { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Width Segs', def: 20, min: 3, max: 64, type: 'int', step: 1 }, { name: 'Height Segs', def: 20, min: 2, max: 64, type: 'int', step: 1 }] },
         'sphere-circles': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Resolution', def: 48, min: 8, max: 128, type: 'int', step: 2 }, { name: 'Loop Density', def: 8, min: 3, max: 20, type: 'int', step: 1 }] },
+        'sphere-geodesic': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Detail', def: 2, min: 0, max: 8, type: 'int', step: 1 }] },
+        'sphere-spiral': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Points', def: 400, min: 10, max: 2000, type: 'int', step: 10 }, { name: 'Turns', def: 10, min: 1, max: 50, type: 'float', step: 1 }] },
+        'sphere-hexagonal': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Detail', def: 1, min: 1, max: 5, type: 'int', step: 1 }] },
+        'sphere-lissajous': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Resolution', def: 1000, min: 100, max: 3000, type: 'int', step: 50 }, { name: 'Freq U', def: 7, min: 1, max: 50, type: 'float', step: 1 }, { name: 'Freq V', def: 5, min: 1, max: 50, type: 'float', step: 1 }, { name: 'Phase', def: 0, min: 0, max: 6.28, type: 'float', step: 0.1 }] },
+        'sphere-voronoi': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Detail', def: 3, min: 1, max: 8, type: 'int', step: 1 }, { name: 'Distortion', def: 0.6, min: 0, max: 1.5, type: 'float', step: 0.05 }] },
+        'sphere-hopf': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Loops', def: 12, min: 3, max: 64, type: 'int', step: 1 }, { name: 'Tilt', def: 0.5, min: 0, max: 3.14, type: 'float', step: 0.05 }] },
+        'sphere-diagonal': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Segs X', def: 24, min: 3, max: 64, type: 'int', step: 1 }, { name: 'Segs Y', def: 16, min: 2, max: 64, type: 'int', step: 1 }] },
+        'sphere-loxodrome': { params: [{ name: 'Radius', def: 1.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Points', def: 600, min: 50, max: 2000, type: 'int', step: 10 }, { name: 'Slope', def: 0.1, min: 0.01, max: 0.5, type: 'float', step: 0.01 }] },
         torus: { params: [{ name: 'Radius', def: 1.5, min: 0.5, max: 3, type: 'float', step: 0.1 }, { name: 'Tube', def: 0.5, min: 0.1, max: 1, type: 'float', step: 0.1 }, { name: 'Radial Segs', def: 20, min: 3, max: 64, type: 'int', step: 1 }, { name: 'Tubular Segs', def: 40, min: 3, max: 100, type: 'int', step: 1 }] },
+        'torus-knot': { params: [{ name: 'Radius', def: 1.5, min: 0.5, max: 3, type: 'float', step: 0.1 }, { name: 'Tube', def: 0.4, min: 0.1, max: 1, type: 'float', step: 0.1 }, { name: 'Tubular Segs', def: 64, min: 3, max: 300, type: 'int', step: 1 }, { name: 'Radial Segs', def: 20, min: 3, max: 64, type: 'int', step: 1 }, { name: 'P', def: 2, min: 1, max: 20, type: 'int', step: 1 }, { name: 'Q', def: 3, min: 1, max: 20, type: 'int', step: 1 }] },
+        'torus-mobius': { params: [{ name: 'Radius', def: 1.5, min: 0.5, max: 3, type: 'float', step: 0.1 }, { name: 'Width', def: 0.5, min: 0.1, max: 2, type: 'float', step: 0.1 }, { name: 'Radial Segs', def: 20, min: 3, max: 64, type: 'int', step: 1 }, { name: 'Tubular Segs', def: 64, min: 3, max: 300, type: 'int', step: 1 }] },
+        'torus-twisted': { params: [{ name: 'Radius', def: 1.5, min: 0.5, max: 3, type: 'float', step: 0.1 }, { name: 'Tube', def: 0.4, min: 0.1, max: 1, type: 'float', step: 0.1 }, { name: 'Radial Segs', def: 20, min: 3, max: 64, type: 'int', step: 1 }, { name: 'Tubular Segs', def: 64, min: 3, max: 300, type: 'int', step: 1 }, { name: 'Twists', def: 2, min: 0, max: 20, type: 'float', step: 0.1 }] },
+        ring: { params: [{ name: 'Inner Radius', def: 0.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Outer Radius', def: 1.5, min: 0.2, max: 5, type: 'float', step: 0.1 }, { name: 'Theta Segs', def: 32, min: 3, max: 128, type: 'int', step: 1 }, { name: 'Phi Segs', def: 1, min: 1, max: 32, type: 'int', step: 1 }] },
+        'ring-gear': { params: [{ name: 'Inner Radius', def: 0.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Outer Radius', def: 1.5, min: 0.2, max: 5, type: 'float', step: 0.1 }, { name: 'Teeth', def: 12, min: 3, max: 64, type: 'int', step: 1 }, { name: 'Tooth Depth', def: 0.3, min: 0.05, max: 2, type: 'float', step: 0.05 }, { name: 'Theta Segs', def: 128, min: 16, max: 512, type: 'int', step: 1 }, { name: 'Phi Segs', def: 1, min: 1, max: 32, type: 'int', step: 1 }] },
+        'ring-spiral': { params: [{ name: 'Inner Radius', def: 0.1, min: 0.0, max: 3, type: 'float', step: 0.1 }, { name: 'Outer Radius', def: 3.0, min: 0.2, max: 10, type: 'float', step: 0.1 }, { name: 'Turns', def: 3, min: 1, max: 20, type: 'int', step: 1 }, { name: 'Theta Segs', def: 128, min: 16, max: 1024, type: 'int', step: 1 }, { name: 'Phi Segs', def: 1, min: 1, max: 32, type: 'int', step: 1 }] },
+        'ring-wave': { params: [{ name: 'Inner Radius', def: 0.5, min: 0.1, max: 3, type: 'float', step: 0.1 }, { name: 'Outer Radius', def: 1.5, min: 0.2, max: 5, type: 'float', step: 0.1 }, { name: 'Waves', def: 8, min: 1, max: 32, type: 'int', step: 1 }, { name: 'Amplitude', def: 0.3, min: 0.05, max: 2, type: 'float', step: 0.05 }, { name: 'Theta Segs', def: 128, min: 16, max: 512, type: 'int', step: 1 }, { name: 'Phi Segs', def: 1, min: 1, max: 32, type: 'int', step: 1 }] },
         math: { params: [{ name: 'Range', def: 5, min: 1, max: 20, type: 'float', step: 1 }, { name: 'Segments', def: 30, min: 5, max: 100, type: 'int', step: 1 }] },
         parametric: { params: [{ name: 'U Min', def: 0, min: -10, max: 10, type: 'float', step: 0.1 }, { name: 'U Max', def: 6.28, min: -10, max: 20, type: 'float', step: 0.1 }, { name: 'V Min', def: 0, min: -10, max: 10, type: 'float', step: 0.1 }, { name: 'V Max', def: 6.28, min: -10, max: 20, type: 'float', step: 0.1 }, { name: 'Segments', def: 60, min: 10, max: 150, type: 'int', step: 1 }] },
         landscape: { params: [{ name: 'Width', def: 3, min: 1, max: 10, type: 'float', step: 0.1 }, { name: 'Height', def: 3, min: 1, max: 10, type: 'float', step: 0.1 }, { name: 'Width Segs', def: 60, min: 10, max: 200, type: 'int', step: 1 }, { name: 'Height Segs', def: 60, min: 10, max: 200, type: 'int', step: 1 }] },
@@ -276,10 +292,24 @@ document.addEventListener('DOMContentLoaded', () => {
         grid: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
         sphere: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
         'sphere-circles': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 8 },
+        'sphere-geodesic': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'sphere-spiral': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'sphere-hexagonal': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'sphere-lissajous': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'sphere-voronoi': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'sphere-hopf': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'sphere-diagonal': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'sphere-loxodrome': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
         torus: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 8 },
+        'torus-knot': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 8 },
+        'torus-mobius': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 8 },
+        'torus-twisted': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 8 },
         cylinder: { epsilon: 0.02, bias: 0, inflate: 0, splineRes: 4 },
         cone: { epsilon: 0, bias: 0, inflate: 0, splineRes: 4 },
         ring: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'ring-gear': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'ring-spiral': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        'ring-wave': { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
         landscape: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 3 },
         math: { epsilon: 0.01, bias: 0, inflate: 0.001, splineRes: 3 },
         parametric: { epsilon: 0.05, bias: 1.0, inflate: 0, splineRes: 3 },
@@ -313,7 +343,7 @@ document.addEventListener('DOMContentLoaded', () => {
         objRot: { x: 0, y: 0, z: 0 },
         clip: { enabled: false, axis: 'x', pos: 0 },
         spline: { force: false, subdiv: 12 },
-        gridUV: { u: true, v: true },
+        gridUV: { u: true, v: true, d1: false, d2: false },
         noise: { enabled: false, noiseType: 'simplex', amp: 0.2, freq: 1.0, axis: 'all', seed: 1 },
         twist: { enabled: false, angle: 1.0, axis: 'y' },
         wave:  { enabled: false, int: 0.5, freq: 2.0, axis: 'z' },
@@ -1303,9 +1333,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = e.target.value;
             if (val === 'sphere') {
                 polyContainer.style.display = 'block';
+                document.getElementById('torus-type-container').style.display = 'none';
                 state.geoType = polyType.value;
+            } else if (val === 'torus') {
+                polyContainer.style.display = 'none';
+                document.getElementById('torus-type-container').style.display = 'block';
+                state.geoType = document.getElementById('torus-type').value;
             } else {
                 polyContainer.style.display = 'none';
+                document.getElementById('torus-type-container').style.display = 'none';
                 state.geoType = val;
             }
             rebuildUIParams(false);
@@ -1323,8 +1359,19 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGeometry();
         });
 
-        document.getElementById('grid-show-u').addEventListener('change', (e) => { saveHistory(); if (!e.target.checked && !state.gridUV.v) { state.gridUV.v = true; document.getElementById('grid-show-v').checked = true; } state.gridUV.u = e.target.checked; updateGeometry(); });
-        document.getElementById('grid-show-v').addEventListener('change', (e) => { saveHistory(); if (!e.target.checked && !state.gridUV.u) { state.gridUV.u = true; document.getElementById('grid-show-u').checked = true; } state.gridUV.v = e.target.checked; updateGeometry(); });
+        document.getElementById('torus-type').addEventListener('change', (e) => {
+            saveHistory();
+            state.geoType = e.target.value;
+            rebuildUIParams(false);
+            applyGeoDefaults(state.geoType);
+            updateUIFromState();
+            updateGeometry();
+        });
+
+        document.getElementById('grid-show-u').addEventListener('change', (e) => { saveHistory(); if (!e.target.checked && !state.gridUV.v && !state.gridUV.d1 && !state.gridUV.d2) { state.gridUV.v = true; document.getElementById('grid-show-v').checked = true; } state.gridUV.u = e.target.checked; updateGeometry(); });
+        document.getElementById('grid-show-v').addEventListener('change', (e) => { saveHistory(); if (!e.target.checked && !state.gridUV.u && !state.gridUV.d1 && !state.gridUV.d2) { state.gridUV.u = true; document.getElementById('grid-show-u').checked = true; } state.gridUV.v = e.target.checked; updateGeometry(); });
+        if(document.getElementById('grid-show-d1')) document.getElementById('grid-show-d1').addEventListener('change', (e) => { saveHistory(); state.gridUV.d1 = e.target.checked; updateGeometry(); });
+        if(document.getElementById('grid-show-d2')) document.getElementById('grid-show-d2').addEventListener('change', (e) => { saveHistory(); state.gridUV.d2 = e.target.checked; updateGeometry(); });
         
         const mathForm = document.getElementById('math-formula'); mathForm.addEventListener('focus', recordDragStart); mathForm.addEventListener('blur', recordDragEnd); mathForm.addEventListener('input', (e) => { state.mathFormula = e.target.value; updateGeometry(); });
         ['x', 'y', 'z'].forEach(axis => { const el = document.getElementById(`param-${axis}`); if (el) { el.addEventListener('focus', recordDragStart); el.addEventListener('blur', recordDragEnd); el.addEventListener('input', (e) => { state.parametricFormulas[axis] = e.target.value; updateGeometry(); }); } });
@@ -1580,19 +1627,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     el.appendChild(inp);
 
                     el.addEventListener('mousedown', (e) => {
-                        e.preventDefault();
+                        if (e.target !== inp) e.preventDefault();
                         if (e.target !== el && e.target !== inp) return;
+
+                        if (e.altKey && state.colorStops.length > 2) {
+                            state.colorStops.splice(i, 1);
+                            if (gradPresets) gradPresets.value = 'custom';
+                            saveHistory();
+                            window.updateGradientEditorUI();
+                            return;
+                        }
+
+                        let startX = e.clientX;
                         let startY = e.clientY;
+                        let dragged = false;
                         recordDragStart();
                         const onMove = (ev) => {
-                            if (ev.clientY - startY > 30 && state.colorStops.length > 2) {
-                                state.colorStops.splice(i, 1);
-                                if (gradPresets) gradPresets.value = 'custom';
-                                window.updateGradientEditorUI();
-                                window.removeEventListener('mousemove', onMove);
-                                window.removeEventListener('mouseup', onUp);
-                                return;
-                            }
+                            if (Math.abs(ev.clientX - startX) > 2 || Math.abs(ev.clientY - startY) > 2) dragged = true;
                             const rect = gradStopsArea.getBoundingClientRect();
                             let pct = (ev.clientX - rect.left) / rect.width;
                             stop.p = Math.max(0, Math.min(1, pct));
@@ -1605,7 +1656,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             window.removeEventListener('mousemove', onMove);
                             window.removeEventListener('mouseup', onUp);
                             recordDragEnd();
-                            window.updateGradientEditorUI();
+                            if (dragged) window.updateGradientEditorUI();
                         };
                         window.addEventListener('mousemove', onMove);
                         window.addEventListener('mouseup', onUp);
@@ -1708,19 +1759,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     el.appendChild(inp);
 
                     el.addEventListener('mousedown', (e) => {
-                        e.preventDefault();
+                        if (e.target !== inp) e.preventDefault();
                         if (e.target !== el && e.target !== inp) return;
+
+                        if (e.altKey && state.lineGradient.stops.length > 2) {
+                            state.lineGradient.stops.splice(i, 1);
+                            if (lineGradPresets) lineGradPresets.value = 'custom';
+                            saveHistory();
+                            window.updateLineGradientEditorUI();
+                            return;
+                        }
+
+                        let startX = e.clientX;
                         let startY = e.clientY;
+                        let dragged = false;
                         recordDragStart();
                         const onMove = (ev) => {
-                            if (ev.clientY - startY > 30 && state.lineGradient.stops.length > 2) {
-                                state.lineGradient.stops.splice(i, 1);
-                                if (lineGradPresets) lineGradPresets.value = 'custom';
-                                window.updateLineGradientEditorUI();
-                                window.removeEventListener('mousemove', onMove);
-                                window.removeEventListener('mouseup', onUp);
-                                return;
-                            }
+                            if (Math.abs(ev.clientX - startX) > 2 || Math.abs(ev.clientY - startY) > 2) dragged = true;
                             const rect = lineGradStopsArea.getBoundingClientRect();
                             let pct = (ev.clientX - rect.left) / rect.width;
                             stop.p = Math.max(0, Math.min(1, pct));
@@ -1733,7 +1788,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             window.removeEventListener('mousemove', onMove);
                             window.removeEventListener('mouseup', onUp);
                             recordDragEnd();
-                            window.updateLineGradientEditorUI();
+                            if (dragged) window.updateLineGradientEditorUI();
                         };
                         window.addEventListener('mousemove', onMove);
                         window.addEventListener('mouseup', onUp);
@@ -1857,17 +1912,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const geoSelect = document.getElementById('geo-type');
         const polyContainer = document.getElementById('poly-type-container');
         const polySelect = document.getElementById('poly-type');
+        const torusContainer = document.getElementById('torus-type-container');
+        const torusSelect = document.getElementById('torus-type');
 
         if (sphereTypes.includes(state.geoType)) {
             geoSelect.value = 'sphere';
             polyContainer.style.display = 'block';
+            torusContainer.style.display = 'none';
             polySelect.value = state.geoType;
+        } else if (torusTypes.includes(state.geoType)) {
+            geoSelect.value = 'torus';
+            torusContainer.style.display = 'block';
+            polyContainer.style.display = 'none';
+            torusSelect.value = state.geoType;
         } else {
             geoSelect.value = state.geoType;
             polyContainer.style.display = 'none';
+            torusContainer.style.display = 'none';
         }
         
         document.getElementById('grid-show-u').checked = state.gridUV.u; document.getElementById('grid-show-v').checked = state.gridUV.v;
+        if(document.getElementById('grid-show-d1')) document.getElementById('grid-show-d1').checked = state.gridUV.d1 || false;
+        if(document.getElementById('grid-show-d2')) document.getElementById('grid-show-d2').checked = state.gridUV.d2 || false;
 
         const isCustom = state.geoType === 'custom'; const isMath = state.geoType === 'math'; const isParametric = state.geoType === 'parametric'; const isLandscape = state.geoType === 'landscape';
         document.getElementById('obj-upload-container').style.display = isCustom ? 'block' : 'none';
@@ -2056,6 +2122,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 geo.userData.wSegs = circleSegs; geo.userData.hSegs = circleSegs;
                 break;
             }
+            case 'sphere-geodesic':
+                geo = new THREE.IcosahedronGeometry(p[0], addDetail(p[1] || 2));
+                break;
+            case 'sphere-hexagonal':
+                geo = new THREE.DodecahedronGeometry(p[0], addDetail(p[1] || 1));
+                break;
+            case 'sphere-spiral':
+            case 'sphere-lissajous':
+            case 'sphere-loxodrome':
+            case 'sphere-hopf':
+            case 'sphere-diagonal':
+            case 'sphere-voronoi':
+                geo = new THREE.SphereGeometry(p[0], 32, 32);
+                break;
             case 'landscape': 
                 geo = generateLandscapeGeometry(detailMultiplier); 
                 geo.userData.wSegs = Math.round(p[2] * detailMultiplier); geo.userData.hSegs = Math.round(p[3] * detailMultiplier);
@@ -2064,10 +2144,99 @@ document.addEventListener('DOMContentLoaded', () => {
                 geo = new THREE.TorusGeometry(p[0], p[1], mult(p[2]), mult(p[3])); 
                 geo.userData.wSegs = mult(p[3]); geo.userData.hSegs = mult(p[2]);
                 break;
+            case 'torus-knot':
+                geo = new THREE.TorusKnotGeometry(p[0], p[1], mult(p[2]), mult(p[3]), p[4], p[5]);
+                geo.userData.wSegs = mult(p[2]); geo.userData.hSegs = mult(p[3]);
+                break;
+            case 'torus-mobius': {
+                const uSegs = mult(p[3]), vSegs = mult(p[2]);
+                geo = new THREE.PlaneGeometry(1, 1, uSegs, vSegs);
+                geo.userData.wSegs = uSegs; geo.userData.hSegs = vSegs;
+                const radius = p[0], width = p[1];
+                const posA = geo.attributes.position;
+                for(let i=0; i<posA.count; i++) {
+                    const u = (posA.getX(i) + 0.5) * Math.PI * 2;
+                    const v = (posA.getY(i) + 0.5) * 2 - 1; 
+                    const x = (radius + (v * width / 2) * Math.cos(u / 2)) * Math.cos(u);
+                    const y = (radius + (v * width / 2) * Math.cos(u / 2)) * Math.sin(u);
+                    const z = (v * width / 2) * Math.sin(u / 2);
+                    posA.setXYZ(i, x, y, z);
+                }
+                geo.computeVertexNormals();
+                break;
+            }
+            case 'torus-twisted': {
+                const radius = p[0], tube = p[1], vSegs = mult(p[2]), uSegs = mult(p[3]), twists = p[4];
+                geo = new THREE.PlaneGeometry(1, 1, uSegs, vSegs);
+                geo.userData.wSegs = uSegs; geo.userData.hSegs = vSegs;
+                const posA = geo.attributes.position;
+                for(let i=0; i<posA.count; i++) {
+                    const u = (posA.getX(i) + 0.5) * Math.PI * 2;
+                    const v = (posA.getY(i) + 0.5) * Math.PI * 2;
+                    const twistV = v + u * twists;
+                    const x = (radius + tube * Math.cos(twistV)) * Math.cos(u);
+                    const y = (radius + tube * Math.cos(twistV)) * Math.sin(u);
+                    const z = tube * Math.sin(twistV);
+                    posA.setXYZ(i, x, y, z);
+                }
+                geo.computeVertexNormals();
+                break;
+            }
             case 'ring': 
                 geo = new THREE.RingGeometry(p[0], p[1], mult(p[2]), mult(p[3])); 
                 geo.userData.wSegs = mult(p[2]); geo.userData.hSegs = mult(p[3]);
                 break;
+            case 'ring-gear': {
+                const inner = p[0], outer = p[1], teeth = p[2], depth = p[3], tSegs = mult(p[4]), pSegs = mult(p[5]);
+                geo = new THREE.RingGeometry(inner, outer, tSegs, pSegs);
+                geo.userData.wSegs = tSegs; geo.userData.hSegs = pSegs;
+                const posA = geo.attributes.position;
+                for (let i=0; i<posA.count; i++) {
+                    const x = posA.getX(i), y = posA.getY(i);
+                    const r = Math.hypot(x, y);
+                    if (r > inner + 0.001) {
+                        const theta = Math.atan2(y, x);
+                        const weight = (r - inner) / (outer - inner);
+                        const toothMod = (Math.sign(Math.sin(theta * teeth)) + 1) / 2 * depth * weight; 
+                        const newR = r + toothMod;
+                        posA.setXYZ(i, newR * Math.cos(theta), newR * Math.sin(theta), 0);
+                    }
+                }
+                geo.computeVertexNormals();
+                break;
+            }
+            case 'ring-wave': {
+                const inner = p[0], outer = p[1], waves = p[2], amp = p[3], tSegs = mult(p[4]), pSegs = mult(p[5]);
+                geo = new THREE.RingGeometry(inner, outer, tSegs, pSegs);
+                geo.userData.wSegs = tSegs; geo.userData.hSegs = pSegs;
+                const posA = geo.attributes.position;
+                for (let i=0; i<posA.count; i++) {
+                    const x = posA.getX(i), y = posA.getY(i);
+                    const rBase = Math.hypot(x, y);
+                    const theta = Math.atan2(y, x);
+                    const newR = rBase + Math.sin(theta * waves) * amp;
+                    posA.setXYZ(i, newR * Math.cos(theta), newR * Math.sin(theta), 0);
+                }
+                geo.computeVertexNormals();
+                break;
+            }
+            case 'ring-spiral': {
+                const inner = p[0], outer = p[1], turns = p[2], thetaSegs = mult(p[3]), phiSegs = mult(p[4]);
+                geo = new THREE.PlaneGeometry(1, 1, thetaSegs, phiSegs);
+                geo.userData.wSegs = thetaSegs; geo.userData.hSegs = phiSegs;
+                const posA = geo.attributes.position;
+                for(let i=0; i<posA.count; i++) {
+                    const u = posA.getX(i) + 0.5; // 0 to 1
+                    const v = posA.getY(i) + 0.5; // 0 to 1
+                    const theta = u * turns * Math.PI * 2;
+                    const rWidth = (outer - inner) / (turns * 1.5); // Ribbon width is narrower than total space
+                    const rBase = inner + u * (outer - inner - rWidth);
+                    const r = rBase + v * rWidth;
+                    posA.setXYZ(i, r * Math.cos(theta), r * Math.sin(theta), 0);
+                }
+                geo.computeVertexNormals();
+                break;
+            }
             case 'grid': 
                 geo = new THREE.PlaneGeometry(p[0], p[1], mult(p[2]), mult(p[3])); 
                 geo.userData.wSegs = mult(p[2]); geo.userData.hSegs = mult(p[3]);
@@ -2148,8 +2317,14 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'cylinder': wSegs = params[3]; hSegs = params[4]; closedU = true; break;
             case 'cone': wSegs = params[2]; hSegs = params[3]; closedU = true; break;
             case 'torus': wSegs = params[3]; hSegs = params[2]; closedU = true; closedV = true; break;
+            case 'torus-knot': wSegs = params[2]; hSegs = params[3]; closedU = true; closedV = true; break;
+            case 'torus-mobius': wSegs = params[3]; hSegs = params[2]; closedU = true; closedV = false; break;
+            case 'torus-twisted': wSegs = params[3]; hSegs = params[2]; closedU = true; closedV = true; break;
             case 'knot': wSegs = params[3]; hSegs = params[2]; closedU = true; closedV = true; break;
             case 'ring': wSegs = params[2]; hSegs = params[3]; closedU = true; break;
+            case 'ring-gear': wSegs = params[4]; hSegs = params[5]; closedU = true; break;
+            case 'ring-wave': wSegs = params[4]; hSegs = params[5]; closedU = true; break;
+            case 'ring-spiral': wSegs = params[3]; hSegs = params[4]; closedU = false; break;
             default: if (params.length >= 2) { wSegs = params[params.length-2]; hSegs = params[params.length-1]; } else { wSegs = 10; hSegs = 10; } break;
         }
         const pos = geometry.attributes.position, vertArray = [], rawSplineGroups = [];
@@ -2164,6 +2339,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const uSegs = f.u, vSegs = f.v, groupSplines = [];
                 if (state.gridUV.u) { for (let y = 0; y <= vSegs; y++) { const pts = []; for (let x = 0; x <= uSegs; x++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints(uSegs * subdivision); let lineVal = (state.lineGradient.axis === 'u' || state.lineGradient.axis === 'both') ? (vSegs > 0 ? y / vSegs : 0) : -1.0; pushSegments(sp, lineVal); groupSplines.push({ points: pts, closed: false, direction: 'u', lineValue: lineVal }); } }
                 if (state.gridUV.v) { for (let x = 0; x <= uSegs; x++) { const pts = []; for (let y = 0; y <= vSegs; y++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints(vSegs * subdivision); let lineVal = (state.lineGradient.axis === 'v' || state.lineGradient.axis === 'both') ? (uSegs > 0 ? x / uSegs : 0) : -1.0; pushSegments(sp, lineVal); groupSplines.push({ points: pts, closed: false, direction: 'v', lineValue: lineVal }); } }
+                if (state.gridUV.d1) {
+                    for (let startX = 0; startX <= uSegs; startX++) { const pts = []; for (let x = startX, y = 0; x <= uSegs && y <= vSegs; x++, y++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(pts.length > 1) { const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints((pts.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: pts, closed: false, direction: 'd1', lineValue: -1.0 }); } }
+                    for (let startY = 1; startY <= vSegs; startY++) { const pts = []; for (let x = 0, y = startY; x <= uSegs && y <= vSegs; x++, y++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(pts.length > 1) { const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints((pts.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: pts, closed: false, direction: 'd1', lineValue: -1.0 }); } }
+                }
+                if (state.gridUV.d2) {
+                    for (let startX = 0; startX <= uSegs; startX++) { const pts = []; for (let x = startX, y = 0; x >= 0 && y <= vSegs; x--, y++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(pts.length > 1) { const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints((pts.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: pts, closed: false, direction: 'd2', lineValue: -1.0 }); } }
+                    for (let startY = 1; startY <= vSegs; startY++) { const pts = []; for (let x = uSegs, y = startY; x >= 0 && y <= vSegs; x--, y++) { const idx = offset + y * (uSegs + 1) + x; pts.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(pts.length > 1) { const curve = new THREE.CatmullRomCurve3(pts); const sp = curve.getPoints((pts.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: pts, closed: false, direction: 'd2', lineValue: -1.0 }); } }
+                }
                 rawSplineGroups.push({ name: `Face_${i}_${f.name}`, splines: groupSplines }); offset += (uSegs + 1) * (vSegs + 1);
             });
         } else {
@@ -2172,9 +2355,234 @@ document.addEventListener('DOMContentLoaded', () => {
             const groupSplines = [];
             if (state.gridUV.u) { for (let y = 0; y <= hSegs; y++) { const points = []; for (let x = 0; x <= wSegs; x++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } let isClosed = closedU; if (isClosed) { if (points.length > 1 && points[0].distanceTo(points[points.length-1]) < 0.0001) points.pop(); } if(points.length < 2) continue; const curve = new THREE.CatmullRomCurve3(points); curve.closed = isClosed; const splinePoints = curve.getPoints(wSegs * subdivision); let lineVal = (state.lineGradient.axis === 'u' || state.lineGradient.axis === 'both') ? (hSegs > 0 ? y / hSegs : 0) : -1.0; pushSegments(splinePoints, lineVal); groupSplines.push({ points: [...points], closed: isClosed, direction: 'u', lineValue: lineVal }); } }
             if (state.gridUV.v) { for (let x = 0; x <= wSegs; x++) { const points = []; for (let y = 0; y <= hSegs; y++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } let isClosed = closedV; if (isClosed) { if (points.length > 1 && points[0].distanceTo(points[points.length-1]) < 0.0001) points.pop(); } if(points.length < 2) continue; const curve = new THREE.CatmullRomCurve3(points); curve.closed = isClosed; const splinePoints = curve.getPoints(hSegs * subdivision); let lineVal = (state.lineGradient.axis === 'v' || state.lineGradient.axis === 'both') ? (wSegs > 0 ? x / wSegs : 0) : -1.0; pushSegments(splinePoints, lineVal); groupSplines.push({ points: [...points], closed: isClosed, direction: 'v', lineValue: lineVal }); } }
+            if (state.gridUV.d1) {
+                for (let startX = 0; startX <= wSegs; startX++) { const points = []; for (let x = startX, y = 0; x <= wSegs && y <= hSegs; x++, y++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(points.length > 1) { const curve = new THREE.CatmullRomCurve3(points); const sp = curve.getPoints((points.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: [...points], closed: false, direction: 'd1', lineValue: -1.0 }); } }
+                for (let startY = 1; startY <= hSegs; startY++) { const points = []; for (let x = 0, y = startY; x <= wSegs && y <= hSegs; x++, y++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(points.length > 1) { const curve = new THREE.CatmullRomCurve3(points); const sp = curve.getPoints((points.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: [...points], closed: false, direction: 'd1', lineValue: -1.0 }); } }
+            }
+            if (state.gridUV.d2) {
+                for (let startX = 0; startX <= wSegs; startX++) { const points = []; for (let x = startX, y = 0; x >= 0 && y <= hSegs; x--, y++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(points.length > 1) { const curve = new THREE.CatmullRomCurve3(points); const sp = curve.getPoints((points.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: [...points], closed: false, direction: 'd2', lineValue: -1.0 }); } }
+                for (let startY = 1; startY <= hSegs; startY++) { const points = []; for (let x = wSegs, y = startY; x >= 0 && y <= hSegs; x--, y++) { let idx = y * (wSegs + 1) + x; if (idx >= pos.count) idx = idx % pos.count; points.push(new THREE.Vector3().fromBufferAttribute(pos, idx)); } if(points.length > 1) { const curve = new THREE.CatmullRomCurve3(points); const sp = curve.getPoints((points.length - 1) * subdivision); pushSegments(sp, -1.0); groupSplines.push({ points: [...points], closed: false, direction: 'd2', lineValue: -1.0 }); } }
+            }
             rawSplineGroups.push({ name: 'Main', splines: groupSplines });
         }
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(vertArray, 3)); geo.setAttribute('lineValue', new THREE.Float32BufferAttribute(lineValueArray, 1)); geo.userData.splineGroups = rawSplineGroups; return geo;
+    }
+
+    function createLissajousSphereWireframe(params, subdivision = 12) {
+        const radius = params[0] || 1.5;
+        const samples = Math.max(10, Math.round(params[1] || 1000));
+        const freqU = params[2] || 7;
+        const freqV = params[3] || 5;
+        const phase = params[4] || 0;
+        
+        const rawPoints = [];
+        for (let i = 0; i <= samples; i++) {
+            const t = (i / samples) * Math.PI * 2;
+            const u = freqU * t + phase;
+            const v = freqV * t;
+            const x = radius * Math.cos(u) * Math.cos(v);
+            const z = radius * Math.sin(u) * Math.cos(v);
+            const y = radius * Math.sin(v);
+            rawPoints.push(new THREE.Vector3(x, y, z));
+        }
+        
+        const curve = new THREE.CatmullRomCurve3(rawPoints);
+        const splinePoints = curve.getPoints(samples * Math.min(subdivision, 4));
+        
+        const linePositions = [];
+        const lineValues = [];
+        for (let i = 0; i < splinePoints.length - 1; i++) {
+            linePositions.push(
+                splinePoints[i].x, splinePoints[i].y, splinePoints[i].z,
+                splinePoints[i+1].x, splinePoints[i+1].y, splinePoints[i+1].z
+            );
+            const val = i / (splinePoints.length - 1);
+            lineValues.push(val, val);
+        }
+        
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        geo.setAttribute('lineValue', new THREE.Float32BufferAttribute(lineValues, 1));
+        geo.userData.splineGroups = [{ name: 'Lissajous', splines: [{ points: rawPoints, closed: true, direction: 'u', lineValue: 0.5 }] }];
+        return geo;
+    }
+
+    function createVoronoiSphereWireframe(params) {
+        const radius = params[0] || 1.5;
+        const detail = Math.max(1, Math.round(params[1] || 3));
+        const randomness = params[2] || 0.6;
+        
+        let baseGeo = new THREE.IcosahedronGeometry(radius, detail);
+        baseGeo = THREE.BufferGeometryUtils.mergeVertices(baseGeo);
+        
+        const pos = baseGeo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            const v = new THREE.Vector3().fromBufferAttribute(pos, i);
+            const hash = Math.sin(v.x * 12.9898 + v.y * 78.233 + v.z * 37.719) * 43758.5453;
+            const hash2 = Math.cos(v.x * 34.9898 + v.y * 12.233 + v.z * 56.719) * 43758.5453;
+            const rand1 = hash - Math.floor(hash);
+            const rand2 = hash2 - Math.floor(hash2);
+            
+            const normal = v.clone().normalize();
+            const tangent = new THREE.Vector3(-normal.z, 0, normal.x).normalize();
+            if(tangent.length() < 0.1) tangent.set(0, normal.z, -normal.y).normalize();
+            const bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+            
+            const displacement = (radius / (detail + 1)) * randomness;
+            v.add(tangent.multiplyScalar((rand1 - 0.5) * displacement));
+            v.add(bitangent.multiplyScalar((rand2 - 0.5) * displacement));
+            
+            v.normalize().multiplyScalar(radius);
+            pos.setXYZ(i, v.x, v.y, v.z);
+        }
+        return new THREE.WireframeGeometry(baseGeo);
+    }
+
+    function createHopfSphereWireframe(params, subdivision = 12) {
+        const radius = params[0] || 1.5;
+        const rings = Math.max(1, Math.round(params[1] || 12));
+        const tilt = params[2] || 0.5;
+        
+        const rawSplineGroups = [];
+        const linePositions = [];
+        const lineValues = [];
+        const segments = 128;
+        
+        for (let r = 0; r < rings; r++) {
+            const angle = (r / rings) * Math.PI;
+            const pts = [];
+            for (let i = 0; i <= segments; i++) {
+                const t = (i / segments) * Math.PI * 2;
+                let x = radius * Math.cos(t);
+                let y = radius * Math.sin(t);
+                let z = 0;
+                
+                const tiltedY = y * Math.cos(tilt) - z * Math.sin(tilt);
+                const tiltedZ = y * Math.sin(tilt) + z * Math.cos(tilt);
+                y = tiltedY;
+                z = tiltedZ;
+                
+                const rotX = x * Math.cos(angle) - z * Math.sin(angle);
+                const rotZ = x * Math.sin(angle) + z * Math.cos(angle);
+                
+                pts.push(new THREE.Vector3(rotX, y, rotZ));
+            }
+            for (let i = 0; i < pts.length - 1; i++) {
+                linePositions.push(pts[i].x, pts[i].y, pts[i].z, pts[i+1].x, pts[i+1].y, pts[i+1].z);
+                const val = i / (pts.length - 1);
+                lineValues.push(val, val);
+            }
+            rawSplineGroups.push({ name: `Ring_${r}`, splines: [{ points: pts, closed: true, direction: 'u', lineValue: r / rings }] });
+        }
+        
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        geo.setAttribute('lineValue', new THREE.Float32BufferAttribute(lineValues, 1));
+        geo.userData.splineGroups = rawSplineGroups;
+        return geo;
+    }
+
+    function createDiagonalSphereWireframe(params) {
+        const radius = params[0] || 1.5;
+        const wSegs = Math.max(3, Math.round(params[1] || 24));
+        const hSegs = Math.max(2, Math.round(params[2] || 16));
+        
+        const linePositions = [];
+        
+        for (let i = 0; i < wSegs; i++) {
+            for (let j = 0; j < hSegs; j++) {
+                const u0 = (i / wSegs) * Math.PI * 2;
+                const u1 = ((i + 1) / wSegs) * Math.PI * 2;
+                const v0 = (j / hSegs) * Math.PI;
+                const v1 = ((j + 1) / hSegs) * Math.PI;
+                
+                const p00 = new THREE.Vector3(radius * Math.cos(u0) * Math.sin(v0), radius * Math.cos(v0), radius * Math.sin(u0) * Math.sin(v0));
+                const p11 = new THREE.Vector3(radius * Math.cos(u1) * Math.sin(v1), radius * Math.cos(v1), radius * Math.sin(u1) * Math.sin(v1));
+                const p01 = new THREE.Vector3(radius * Math.cos(u0) * Math.sin(v1), radius * Math.cos(v1), radius * Math.sin(u0) * Math.sin(v1));
+                const p10 = new THREE.Vector3(radius * Math.cos(u1) * Math.sin(v0), radius * Math.cos(v0), radius * Math.sin(u1) * Math.sin(v0));
+                
+                linePositions.push(p00.x, p00.y, p00.z, p11.x, p11.y, p11.z);
+                linePositions.push(p01.x, p01.y, p01.z, p10.x, p10.y, p10.z);
+            }
+        }
+        
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        return geo;
+    }
+
+    function createLoxodromeSphereWireframe(params, subdivision = 12) {
+        const radius = params[0] || 1.5;
+        const samples = Math.max(10, Math.round(params[1] || 600));
+        const slope = params[2] || 0.1;
+        
+        const rawPoints = [];
+        for (let i = 0; i < samples; i++) {
+            const t = (i / (samples - 1));
+            const v = -Math.PI / 2 + t * Math.PI;
+            const safeV = Math.max(-Math.PI/2 + 0.001, Math.min(Math.PI/2 - 0.001, v));
+            const u = (1 / slope) * Math.log(Math.tan(Math.PI / 4 + safeV / 2));
+            
+            const x = radius * Math.cos(u) * Math.cos(safeV);
+            const z = radius * Math.sin(u) * Math.cos(safeV);
+            const y = radius * Math.sin(safeV);
+            rawPoints.push(new THREE.Vector3(x, y, z));
+        }
+        
+        const curve = new THREE.CatmullRomCurve3(rawPoints);
+        const splinePoints = curve.getPoints(samples * Math.min(subdivision, 4));
+        
+        const linePositions = [];
+        const lineValues = [];
+        for (let i = 0; i < splinePoints.length - 1; i++) {
+            linePositions.push(
+                splinePoints[i].x, splinePoints[i].y, splinePoints[i].z,
+                splinePoints[i+1].x, splinePoints[i+1].y, splinePoints[i+1].z
+            );
+            const val = i / (splinePoints.length - 1);
+            lineValues.push(val, val);
+        }
+        
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        geo.setAttribute('lineValue', new THREE.Float32BufferAttribute(lineValues, 1));
+        geo.userData.splineGroups = [{ name: 'Loxodrome', splines: [{ points: rawPoints, closed: false, direction: 'u', lineValue: 0.5 }] }];
+        return geo;
+    }
+
+    function createFibonacciSpiralWireframe(params, subdivision = 12) {
+        const radius = params[0] || 1.5;
+        const samples = Math.max(10, Math.round(params[1] || 400));
+        const turns = params[2] || 10;
+        
+        const rawPoints = [];
+        for (let i = 0; i < samples; i++) {
+            const y = 1 - (i / (samples - 1)) * 2;
+            const r = Math.sqrt(1 - y * y);
+            const theta = turns * Math.PI * 2 * (i / (samples - 1));
+            rawPoints.push(new THREE.Vector3(Math.cos(theta) * r * radius, y * radius, Math.sin(theta) * r * radius));
+        }
+        
+        const curve = new THREE.CatmullRomCurve3(rawPoints);
+        const splinePoints = curve.getPoints(samples * subdivision);
+        
+        const linePositions = [];
+        const lineValues = [];
+        for (let i = 0; i < splinePoints.length - 1; i++) {
+            linePositions.push(
+                splinePoints[i].x, splinePoints[i].y, splinePoints[i].z,
+                splinePoints[i+1].x, splinePoints[i+1].y, splinePoints[i+1].z
+            );
+            const val1 = i / (splinePoints.length - 1);
+            const val2 = (i + 1) / (splinePoints.length - 1);
+            lineValues.push(val1, val1);
+        }
+        
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+        geo.setAttribute('lineValue', new THREE.Float32BufferAttribute(lineValues, 1));
+        geo.userData.splineGroups = [{ name: 'Spiral', splines: [{ points: rawPoints, closed: false, direction: 'u', lineValue: 0.5 }] }];
+        return geo;
     }
 
     function createOverlappingCirclesWireframe(params) {
@@ -2362,7 +2770,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (sphereTypes.includes(state.geoType) && state.geoType !== 'sphere') isSpline = false; 
             if (state.geoType === 'sphere') isSpline = true; 
             
-            const supportsSplines = ['grid', 'cube', 'math', 'parametric', 'sphere', 'cylinder', 'cone', 'torus', 'knot', 'ring', 'landscape'].includes(state.geoType);
+            const supportsSplines = ['grid', 'cube', 'math', 'parametric', 'sphere', 'cylinder', 'cone', 'torus', 'torus-knot', 'torus-mobius', 'torus-twisted', 'ring', 'landscape'].includes(state.geoType);
             if (state.lineGradient.enabled && supportsSplines) isSpline = true;
 
             let geoSolid;
@@ -2385,6 +2793,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 wireGeo = createOverlappingCirclesWireframe(state.geoParams);
                 wireGeo.applyMatrix4(matrix);
                 applyDeformations(wireGeo, { skipNormals: true });
+            } else if (state.geoType === 'sphere-spiral') {
+                wireGeo = createFibonacciSpiralWireframe(state.geoParams, state.spline.subdiv);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+                anySplineCount = true;
+            } else if (state.geoType === 'sphere-geodesic') {
+                const baseGeo = new THREE.IcosahedronGeometry(state.geoParams[0] || 1.5, Math.round(state.geoParams[1] || 2));
+                wireGeo = new THREE.WireframeGeometry(baseGeo);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+            } else if (state.geoType === 'sphere-hexagonal') {
+                const baseGeo = new THREE.DodecahedronGeometry(state.geoParams[0] || 1.5, Math.round(state.geoParams[1] || 1));
+                wireGeo = new THREE.EdgesGeometry(baseGeo, 10);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+            } else if (state.geoType === 'sphere-lissajous') {
+                wireGeo = createLissajousSphereWireframe(state.geoParams, state.spline.subdiv);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+                anySplineCount = true;
+            } else if (state.geoType === 'sphere-voronoi') {
+                wireGeo = createVoronoiSphereWireframe(state.geoParams);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+            } else if (state.geoType === 'sphere-hopf') {
+                wireGeo = createHopfSphereWireframe(state.geoParams, state.spline.subdiv);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+                anySplineCount = true;
+            } else if (state.geoType === 'sphere-diagonal') {
+                wireGeo = createDiagonalSphereWireframe(state.geoParams);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+            } else if (state.geoType === 'sphere-loxodrome') {
+                wireGeo = createLoxodromeSphereWireframe(state.geoParams, state.spline.subdiv);
+                wireGeo.applyMatrix4(matrix);
+                applyDeformations(wireGeo, { skipNormals: true });
+                anySplineCount = true;
             } else if (isSpline && (state.style !== 'dots' && state.style !== 'dots-solid' && state.style !== 'triangles' || state.lineGradient.enabled)) {
                 wireGeo = createSplineWireframe(geoWire, state.geoParams, state.geoType, state.spline.subdiv);
                 anySplineCount = true;
