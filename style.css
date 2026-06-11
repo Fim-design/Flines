@@ -587,6 +587,7 @@ input[type="range"]::-webkit-slider-thumb {
     transform: translateX(-50%);
     cursor: ew-resize;
     z-index: 2;
+    pointer-events: auto;
 }
 
 .grad-stop:hover {
