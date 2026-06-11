@@ -91,6 +91,7 @@
                                 <option value="sphere">Sphere</option> <!-- Acts as container for Polyhedra -->
                                 <option value="cube">Cube</option>
                                 <option value="torus">Torus</option>
+                                <option value="ring">Ring</option>
                                 <option value="grid">Grid / Plane</option>
                                 <option value="landscape">Landscape Generator</option>
                                 <option value="math">Math Surface</option>
@@ -105,10 +106,50 @@
                             <select id="poly-type">
                                 <option value="sphere">Sphere</option>
                                 <option value="sphere-circles">Sphere (Overlapping Circles)</option>
+                                <option value="sphere-geodesic">Geodesic Sphere</option>
+                                <option value="sphere-spiral">Fibonacci Spiral Sphere</option>
+                                <option value="sphere-hexagonal">Hexagonal Sphere</option>
+                                <option value="sphere-lissajous">Lissajous Sphere</option>
+                                <option value="sphere-voronoi">Voronoi / Delaunay Sphere</option>
+                                <option value="sphere-hopf">Hopf Fibration Sphere</option>
+                                <option value="sphere-diagonal">UV Diagonals Sphere</option>
+                                <option value="sphere-loxodrome">Loxodrome Sphere</option>
                                 <option value="icosahedron">Icosahedron</option>
                                 <option value="tetrahedron">Tetrahedron</option>
                                 <option value="octahedron">Octahedron</option>
                                 <option value="dodecahedron">Dodecahedron</option>
+                            </select>
+                    </div>
+
+                    <!-- Subtype Selector for Torus -->
+                    <div class="control" id="torus-type-container" style="display:none;">
+                        <label>Shape</label>
+                            <select id="torus-type">
+                                <option value="torus">Torus</option>
+                                <option value="torus-knot">Torus Knot</option>
+                                <option value="torus-mobius">Mobius Strip / Torus</option>
+                                <option value="torus-twisted">Twisted Torus</option>
+                            </select>
+                    </div>
+
+                    <!-- Subtype Selector for Cube -->
+                    <div class="control" id="cube-type-container" style="display:none;">
+                        <label>Shape</label>
+                            <select id="cube-type">
+                                <option value="cube">Cube</option>
+                                <option value="cube-rounded">Rounded Cube</option>
+                                <option value="cube-sphere">Cube Sphere (Normalized)</option>
+                            </select>
+                    </div>
+
+                    <!-- Subtype Selector for Ring -->
+                    <div class="control" id="ring-type-container" style="display:none;">
+                        <label>Shape</label>
+                            <select id="ring-type">
+                                <option value="ring">Ring</option>
+                                <option value="ring-gear">Gear Ring</option>
+                                <option value="ring-spiral">Spiral Ribbon</option>
+                                <option value="ring-wave">Wave Ring</option>
                             </select>
                     </div>
 
@@ -149,12 +190,18 @@
                     <!-- Wireframe Grid Options -->
                     <div class="control-group" id="grid-uv-controls" style="margin-top:10px;">
                         <label style="margin-bottom:5px; display:block; color:#aaa; font-size:11px;">Grid Lines</label>
-                        <div style="display:flex; gap:15px;">
+                        <div style="display:flex; gap:15px; flex-wrap:wrap;">
                             <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
                                 <input type="checkbox" id="grid-show-u" checked> U (Horiz)
                             </label>
                             <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
                                 <input type="checkbox" id="grid-show-v" checked> V (Vert)
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                                <input type="checkbox" id="grid-show-d1"> D1 (Diag /)
+                            </label>
+                            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                                <input type="checkbox" id="grid-show-d2"> D2 (Diag \)
                             </label>
                         </div>
                     </div>
@@ -853,7 +900,7 @@
                                             <!-- stops injected by JS -->
                                         </div>
                                     </div>
-                                    <div style="font-size: 10px; color: #888; text-align: center; margin-bottom: 12px; line-height: 1.2;">Click bar to add stop. Drag stop down to remove.</div>
+                                    <div style="font-size: 10px; color: #888; text-align: center; margin-bottom: 12px; line-height: 1.2;">Click bar to add stop. Alt click to remove color.</div>
                                     
                                     <div style="margin-top:15px; border-top:1px solid #444; padding-top:10px;">
                                         <label style="font-size:11px; color:#aaa; margin-bottom:8px;">Apply To</label>
