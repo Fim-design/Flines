@@ -284,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Geometry Defaults for Smart Rendering
     const geoDefaults = {
-        cube: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4 },
+        cube: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 4, minLen: 2 },
         tetrahedron: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 1 },
         octahedron: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 1 },
         dodecahedron: { epsilon: 0.01, bias: 0, inflate: 0, splineRes: 1 },
@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         autoRotate: false,
         svgPreview: false,
         style: 'hidden-line', 
-        hiddenSettings: { bias: 0, epsilon: 0.01, splineRes: 4, cutPrecision: 6, inflate: 0, minLen: 0, invert: false, silhouette: false, silhouetteWidth: 3 },
+        hiddenSettings: { bias: 0, epsilon: 0.01, splineRes: 4, cutPrecision: 6, inflate: 0, minLen: 2, invert: false, silhouette: false, silhouetteWidth: 3 },
         occlusionMethod: 'gpu',
         gpuGridSize: 1,
         gpuDepthMap: null,
@@ -1320,6 +1320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.hiddenSettings.inflate = defs.inflate;
             state.hiddenSettings.splineRes = defs.splineRes;
             state.hiddenSettings.silhouette = defs.silhouette !== undefined ? defs.silhouette : (type !== 'cube');
+            state.hiddenSettings.minLen = defs.minLen || 0;
             
             document.getElementById('hl-epsilon').value = defs.epsilon;
             document.getElementById('val-hl-epsilon').value = defs.epsilon;
@@ -1330,6 +1331,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('hl-spline-res').value = defs.splineRes;
             document.getElementById('val-hl-spline-res').value = defs.splineRes;
             document.getElementById('hl-silhouette').checked = state.hiddenSettings.silhouette;
+            
+            const minLenEl = document.getElementById('hl-min-len');
+            if (minLenEl) {
+                minLenEl.value = state.hiddenSettings.minLen;
+                document.getElementById('val-hl-min-len').value = state.hiddenSettings.minLen;
+            }
         };
 
         geoType.addEventListener('change', (e) => {
@@ -3171,8 +3178,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 storedDepth = minD * camera.far;
             }
             const currentDepth = -_c1.z;
-            let bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.1; // robust baseline bias to prevent z-fighting gaps
-            if (isSilhouetteLine) bias += 0.3; // Extra robust bias for silhouettes
+            let bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon;
+            if (isSilhouetteLine) bias += 0.2; // robust noise floor strictly for silhouettes
             return currentDepth > storedDepth + bias;
         }
 
