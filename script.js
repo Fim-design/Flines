@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         autoRotate: false,
         svgPreview: false,
         style: 'hidden-line', 
-        hiddenSettings: { bias: 0, epsilon: 0.01, splineRes: 4, inflate: 0, minLen: 0, invert: false },
+        hiddenSettings: { bias: 0, epsilon: 0.01, splineRes: 4, cutPrecision: 6, inflate: 0, minLen: 0, invert: false, silhouette: false, silhouetteWidth: 3 },
         occlusionMethod: 'gpu',
         gpuGridSize: 1,
         gpuDepthMap: null,
@@ -583,10 +583,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (state.opGradStart === undefined) state.opGradStart = 0.0;
         if (state.opGradEnd === undefined) state.opGradEnd = 1.0;
         if (state.occlusionMethod === undefined) {
-            state.occlusionMethod = state.legacyHiddenLine ? 'simple' : 'precise';
+            state.occlusionMethod = 'gpu';
         }
         if (state.gpuGridSize === undefined) state.gpuGridSize = 1;
-        state.properOrder = true;
+
         updateUIFromState(); updateGeometry(); updateMaterialUniforms();
         camera.position.set(state.cam.x, state.cam.y, state.cam.z); 
         if (state.cam.target) {
@@ -1309,6 +1309,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const polyContainer = document.getElementById('poly-type-container');
         const polyType = document.getElementById('poly-type');
         syncInput('hl-bias', 'val-hl-bias', (v) => { state.hiddenSettings.bias = parseFloat(v); updateGeometry(); });
+        document.getElementById('hl-silhouette').addEventListener('change', (e) => { saveHistory(); state.hiddenSettings.silhouette = e.target.checked; if(state.svgPreview) disableSVGPreview(); updateGeometry(); });
+        syncInput('hl-silhouette-width', 'val-hl-silhouette-width', (v) => { state.hiddenSettings.silhouetteWidth = parseFloat(v); if(state.svgPreview) disableSVGPreview(); updateGeometry(); });
         document.getElementById('hl-invert').addEventListener('change', (e) => { saveHistory(); state.hiddenSettings.invert = e.target.checked; if(state.svgPreview) disableSVGPreview(); updateGeometry(); });
 
         const applyGeoDefaults = (type) => {
@@ -1317,6 +1319,7 @@ document.addEventListener('DOMContentLoaded', () => {
             state.hiddenSettings.bias = defs.bias;
             state.hiddenSettings.inflate = defs.inflate;
             state.hiddenSettings.splineRes = defs.splineRes;
+            state.hiddenSettings.silhouette = defs.silhouette !== undefined ? defs.silhouette : (type !== 'cube');
             
             document.getElementById('hl-epsilon').value = defs.epsilon;
             document.getElementById('val-hl-epsilon').value = defs.epsilon;
@@ -1326,6 +1329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('val-hl-inflate').value = defs.inflate;
             document.getElementById('hl-spline-res').value = defs.splineRes;
             document.getElementById('val-hl-spline-res').value = defs.splineRes;
+            document.getElementById('hl-silhouette').checked = state.hiddenSettings.silhouette;
         };
 
         geoType.addEventListener('change', (e) => {
@@ -1512,14 +1516,6 @@ document.addEventListener('DOMContentLoaded', () => {
             else if(state.svgPreview) disableSVGPreview(); 
         });
 
-        const hlMethod = document.getElementById('hl-method');
-        if (hlMethod) hlMethod.addEventListener('change', (e) => {
-            saveHistory();
-            state.occlusionMethod = e.target.value;
-            state.legacyHiddenLine = (state.occlusionMethod === 'simple');
-            updateUIFromState();
-            if(state.svgPreview) disableSVGPreview();
-        });
 
         const gpuGrid = document.getElementById('gpu-grid');
         if (gpuGrid) gpuGrid.addEventListener('change', (e) => {
@@ -2001,24 +1997,27 @@ document.addEventListener('DOMContentLoaded', () => {
         const isWireframe = state.style === 'wireframe';
 
         setDisplay('grid-uv-controls', isSpline && state.geoType !== 'cone' && state.geoType !== 'cylinder');
-        const isPrecise = state.occlusionMethod === 'precise' || state.occlusionMethod === 'precise-fast' || state.occlusionMethod === 'gpu';
-        setDisplay('ctrl-hl-epsilon', (isHiddenLine || isTriangles) && isPrecise);
-        setDisplay('ctrl-hl-spline-res', (isHiddenLine || isWireframe) && isSpline && isPrecise);
+        setDisplay('ctrl-hl-epsilon', (isHiddenLine || isTriangles));
+        setDisplay('ctrl-hl-spline-res', (isHiddenLine || isWireframe) && isSpline);
         
         setDisplay('ctrl-solid-subdiv', (isHiddenLine || isTriangles) && isSpline);
         setVal('solid-subdiv', state.solidSubdiv); setVal('val-solid-subdiv', state.solidSubdiv);
 
-        setDisplay('ctrl-hl-method', isHiddenLine || isTriangles || isWireframe); setDisplay('ctrl-hl-proper-order', true);
-        setDisplay('ctrl-gpu-grid', (isHiddenLine || isTriangles || isWireframe) && state.occlusionMethod === 'gpu');
+
+        setDisplay('ctrl-gpu-grid', (isHiddenLine || isTriangles || isWireframe));
         
+        setDisplay('ctrl-hl-silhouette', isHiddenLine || isTriangles);
+        setDisplay('ctrl-hl-silhouette-width', (isHiddenLine || isTriangles) && state.hiddenSettings.silhouette);
         setDisplay('ctrl-hl-invert', isHiddenLine || isTriangles);
         setDisplay('ctrl-hl-advanced', isHiddenLine || isTriangles);
 
         setVal('hl-epsilon', state.hiddenSettings.epsilon); setVal('val-hl-epsilon', state.hiddenSettings.epsilon); setVal('hl-spline-res', state.hiddenSettings.splineRes); setVal('val-hl-spline-res', state.hiddenSettings.splineRes);
-        setVal('hl-method', state.occlusionMethod); setVal('gpu-grid', state.gpuGridSize); setVal('hl-bias', state.hiddenSettings.bias); setVal('val-hl-bias', state.hiddenSettings.bias);
+        setVal('gpu-grid', state.gpuGridSize); setVal('hl-bias', state.hiddenSettings.bias); setVal('val-hl-bias', state.hiddenSettings.bias);
 
         setVal('hl-inflate', state.hiddenSettings.inflate); setVal('val-hl-inflate', state.hiddenSettings.inflate);
         setVal('hl-min-len', state.hiddenSettings.minLen); setVal('val-hl-min-len', state.hiddenSettings.minLen);
+        setCheck('hl-silhouette', state.hiddenSettings.silhouette);
+        setVal('hl-silhouette-width', state.hiddenSettings.silhouetteWidth); setVal('val-hl-silhouette-width', state.hiddenSettings.silhouetteWidth);
         setCheck('hl-invert', state.hiddenSettings.invert);
 
         setCheck('use-z-color', state.zDepth.color); setDisplay('z-color-controls', state.zDepth.color);
@@ -2774,8 +2773,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.lineGradient.enabled && supportsSplines) isSpline = true;
 
             let geoSolid;
-            if (isHiddenLine && isSpline && state.solidSubdiv > 1) {
-                geoSolid = generateBaseGeometry(state.solidSubdiv);
+            let effectiveSolidSubdiv = state.solidSubdiv;
+            if (isHiddenLine && isSpline) effectiveSolidSubdiv = Math.max(state.solidSubdiv, 4);
+            if (isHiddenLine && isSpline && effectiveSolidSubdiv > 1) {
+                geoSolid = generateBaseGeometry(effectiveSolidSubdiv);
                 geoSolid.applyMatrix4(matrix);
             } else {
                 geoSolid = geoWire.clone();
@@ -3047,6 +3048,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const isDots = (state.style === 'dots' || state.style === 'dots-solid');
         const isHiddenLine = (state.style === 'hidden-line' || state.style === 'triangles' || state.style === 'dots-solid' || state.style === 'halftone' || state.style === 'checkerboard');
         
+        state.properOrder = (state.zDepth.color || state.zDepth.opacity || state.zDepth.dof);
+        
         const splineGroups = meshWire ? meshWire.geometry.userData.splineGroups : null;
         camera.updateMatrixWorld();
         const matWorld = meshWire ? meshWire.matrixWorld : new THREE.Matrix4();
@@ -3137,49 +3140,40 @@ document.addEventListener('DOMContentLoaded', () => {
         let depthResW = Math.max(2560, Math.floor(width * 4.0));
         let depthResH = Math.max(2560, Math.floor(height * 4.0));
 
-        function checkOcclusion(targetPoint, maxDist) {
-            if (!isHiddenLine || !meshSolid) return false;
-            if (state.occlusionMethod === 'gpu' && gpuDepthData) {
-                _c1.copy(targetPoint).applyMatrix4(matView);
-                _vProj.copy(_c1).applyMatrix4(matProj);
-                const tx = (_vProj.x * 0.5 + 0.5), ty = (_vProj.y * 0.5 + 0.5);
-                if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return false;
-                const fx = tx * (depthResW - 1), fy = ty * (depthResH - 1);
-                const ix = Math.floor(fx), iy = Math.floor(fy);
-                let storedDepth;
-                const gridSize = state.gpuGridSize || 1;
-                if (gridSize <= 1) {
-                    const wx = fx - ix, wy = fy - iy, nx = Math.min(depthResW - 1, ix + 1), ny = Math.min(depthResH - 1, iy + 1);
-                    const d00 = gpuDepthData[iy * depthResW + ix], d10 = gpuDepthData[iy * depthResW + nx], d01 = gpuDepthData[ny * depthResW + ix], d11 = gpuDepthData[ny * depthResW + nx];
-                    storedDepth = (d00 * (1 - wx) * (1 - wy) + d10 * wx * (1 - wy) + d01 * (1 - wx) * wy + d11 * wx * wy) * camera.far;
-                } else {
-                    let minD = 1.0; const radius = Math.floor(gridSize / 2);
-                    for (let dy = -radius; dy <= radius; dy++) {
-                        for (let dx = -radius; dx <= radius; dx++) {
-                            const nx = Math.max(0, Math.min(depthResW - 1, ix + dx)), ny = Math.max(0, Math.min(depthResH - 1, iy + dy));
-                            const d = gpuDepthData[ny * depthResW + nx]; if (d < minD) minD = d;
-                        }
-                    }
-                    storedDepth = minD * camera.far;
-                }
-                const currentDepth = -_c1.z;
-                const bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.0005;
-                return currentDepth > storedDepth + bias;
-            }
-            rayDir.subVectors(targetPoint, camPos).normalize();
-            raycaster.set(camPos, rayDir);
-            raycaster.near = 0.001; // Avoid self-intersection with very close faces
-
-            const exportBias = state.hiddenSettings.bias * 0.1, epsilon = state.hiddenSettings.epsilon;
-            let farDist = maxDist;
-            if (exportBias > 0 && epsilon > 0) farDist = maxDist - epsilon - exportBias;
-            else if (exportBias > 0) farDist = maxDist - exportBias;
-            else if (epsilon > 0) farDist = maxDist - epsilon;
+        function checkOcclusion(targetPoint, isSilhouetteLine = false) {
+            if (!isHiddenLine || !meshSolid || !gpuDepthData) return false;
             
-            raycaster.far = Math.max(0, farDist);
-            const hits = raycaster.intersectObject(meshSolid);
-            for (let i = 0; i < hits.length; i++) { if (!isClipped(hits[i].point)) return true; }
-            return false;
+            _c1.copy(targetPoint).applyMatrix4(matView);
+            _vProj.copy(_c1).applyMatrix4(matProj);
+            const tx = (_vProj.x * 0.5 + 0.5), ty = (_vProj.y * 0.5 + 0.5);
+            if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return false;
+            const fx = tx * (depthResW - 1), fy = ty * (depthResH - 1);
+            const ix = Math.floor(fx), iy = Math.floor(fy);
+            let storedDepth;
+            const gridSize = state.gpuGridSize || 1;
+            if (gridSize <= 1) {
+                const wx = fx - ix, wy = fy - iy, nx = Math.min(depthResW - 1, ix + 1), ny = Math.min(depthResH - 1, iy + 1);
+                const d00 = gpuDepthData[iy * depthResW + ix], d10 = gpuDepthData[iy * depthResW + nx], d01 = gpuDepthData[ny * depthResW + ix], d11 = gpuDepthData[ny * depthResW + nx];
+                let validD = 0, weight = 0;
+                if (d00 < 0.999) { validD += d00 * (1 - wx) * (1 - wy); weight += (1 - wx) * (1 - wy); }
+                if (d10 < 0.999) { validD += d10 * wx * (1 - wy); weight += wx * (1 - wy); }
+                if (d01 < 0.999) { validD += d01 * (1 - wx) * wy; weight += (1 - wx) * wy; }
+                if (d11 < 0.999) { validD += d11 * wx * wy; weight += wx * wy; }
+                storedDepth = (weight > 0.001) ? (validD / weight) * camera.far : camera.far;
+            } else {
+                let minD = 1.0; const radius = Math.floor(gridSize / 2);
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        const nx = Math.max(0, Math.min(depthResW - 1, ix + dx)), ny = Math.max(0, Math.min(depthResH - 1, iy + dy));
+                        const d = gpuDepthData[ny * depthResW + nx]; if (d < minD) minD = d;
+                    }
+                }
+                storedDepth = minD * camera.far;
+            }
+            const currentDepth = -_c1.z;
+            let bias = (state.hiddenSettings.bias * 0.1) + state.hiddenSettings.epsilon + 0.1; // robust baseline bias to prevent z-fighting gaps
+            if (isSilhouetteLine) bias += 0.3; // Extra robust bias for silhouettes
+            return currentDepth > storedDepth + bias;
         }
 
         const checkSignal = () => { if (signal && signal.aborted) throw new Error('Cancelled'); };
@@ -3275,7 +3269,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // GPU Depth Capture (needed for checkerboard and hidden line styles)
-        if (state.occlusionMethod === 'gpu' && isHiddenLine && meshSolid) {
+        if (isHiddenLine && meshSolid) {
             pushProgress(5, 'GPU: Capturing Depth Map (High Res)...');
             const depthTarget = new THREE.WebGLRenderTarget(depthResW, depthResH);
             const depthMaterial = new THREE.ShaderMaterial({
@@ -3368,7 +3362,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (vA_cam.z > -near || vB_cam.z > -near || vC_cam.z > -near || vE_cam.z > -near) continue;
 
                     // Slightly more generous bias for checkerboard to avoid self-occlusion artifacts
-                    const isOccluded = isHiddenLine && checkOcclusion(mid, dist);
+                    const isOccluded = isHiddenLine && checkOcclusion(mid);
                     if (isOccluded && state.checkerboard.deleteHidden) continue;
 
                     const pts = [vA_cam, vB_cam, vE_cam, vC_cam].map(vc => project(vc));
@@ -3439,7 +3433,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const vC_cam = vC.clone().applyMatrix4(matView);
                     if (vA_cam.z > -near || vB_cam.z > -near || vC_cam.z > -near) continue;
 
-                    const isOccluded = isHiddenLine && checkOcclusion(mid, dist);
+                    const isOccluded = isHiddenLine && checkOcclusion(mid);
                     if (isOccluded && state.checkerboard.deleteHidden) continue;
 
                     const pts = [vA_cam, vB_cam, vC_cam].map(vc => project(vc));
@@ -3617,6 +3611,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 2. Style Calculation
             const style = getStyle(dist, worldMid, lineVal);
+            if (lineVal === -999.0) style.scale = (state.hiddenSettings.silhouetteWidth || 3.0) / (state.strokeWidth || 1);
             if (style.op <= 0.001) return;
 
             rawSegments.push({ p1: {x: pA.x, y: pA.y}, p2: {x: pB.x, y: pB.y}, z: dist, style: style, isSpline: isSpline });
@@ -3630,8 +3625,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const dStart = camPos.distanceTo(wStart);
             const dEnd = camPos.distanceTo(wEnd);
             
-            const visStart = !isClipped(wStart) && (checkOcclusion(wStart, dStart) === state.hiddenSettings.invert);
-            const visEnd = !isClipped(wEnd) && (checkOcclusion(wEnd, dEnd) === state.hiddenSettings.invert);
+            const isSil = (lineVal === -999.0);
+            const visStart = !isClipped(wStart) && (checkOcclusion(wStart, isSil) === state.hiddenSettings.invert);
+            const visEnd = !isClipped(wEnd) && (checkOcclusion(wEnd, isSil) === state.hiddenSettings.invert);
             
             if (visStart === visEnd) {
                 // If both are visible, we promote to collection
@@ -3652,7 +3648,7 @@ document.addEventListener('DOMContentLoaded', () => {
                      const mid = pStart.clone().lerp(pEnd, 0.5);
                      const wMid = mid.clone().applyMatrix4(matWorld);
                      const dMid = camPos.distanceTo(wMid);
-                     const visMid = !isClipped(wMid) && (checkOcclusion(wMid, dMid) === state.hiddenSettings.invert);
+                     const visMid = !isClipped(wMid) && (checkOcclusion(wMid, isSil) === state.hiddenSettings.invert);
                      if (visMid) {
                          traceSegmentRecursive(pStart, mid, depth + 1, isSpline, lineVal);
                          traceSegmentRecursive(mid, pEnd, depth + 1, isSpline, lineVal);
@@ -3661,7 +3657,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            if (depth > 6) { 
+            let maxDepth = 6;
+            let doReturn = false;
+            if (depth > maxDepth) {
+                doReturn = true;
+            }
+            if (doReturn) { 
                 if (visStart) {
                     const mid = pStart.clone().lerp(pEnd, 0.5);
                     const wMid = mid.clone().applyMatrix4(matWorld);
@@ -3700,181 +3701,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 checkSignal(); const group = splineGroups[g], splines = group.splines; let groupOutput = '', groupOutputU = '', groupOutputV = '';
                 tickProgress(0, `Processing Group ${group.name}...`);
                 await new Promise(r => setTimeout(r, 0)); // Ensure non-blocking
-                
-                // --- OCCLUSION METHOD CHECK ---
-                const useFastLegacy = state.occlusionMethod === 'simple';
+                for (let i = 0; i < splines.length; i++) {
+                    await smartYield(); 
+                    const splineData = splines[i], rawPoints = splineData.points;
+                    if(rawPoints.length < 2) { markLineRendered('Processing lines...'); continue; }
 
-                if (useFastLegacy) {
-                    // === OLD FAST PATH (Bezier Control Points) ===
-                    for (let i = 0; i < splines.length; i++) {
-                        await smartYield(); 
-                        const splineData = splines[i], rawPoints = [...splineData.points];
-                        const lineVal = splineData.lineValue;
-                        if (splineData.closed && rawPoints.length > 2) rawPoints.push(rawPoints[0].clone());
-                        
-                        const worldPoints = rawPoints.map(p => p.clone().applyMatrix4(matWorld)); 
-                        const precalc = []; 
-                        let hasVisibleVert = false, minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-                        
-                        for (let j = 0; j < worldPoints.length; j++) {
-                            const vWorld = worldPoints[j], vCam = vWorld.clone().applyMatrix4(matView);
-                            if (vCam.z <= -near) { 
-                                const p = project(vCam); 
-                                if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; 
-                                if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; 
-                                hasVisibleVert = true; 
-                                precalc.push({ vWorld, vCam, p, dist: camPos.distanceTo(vWorld), inFrustum: true }); 
-                            } else { 
-                                precalc.push({ vWorld, vCam, inFrustum: false }); 
-                            }
-                        }
-                        
-                        if (!hasVisibleVert || maxX < 0 || minX > width || maxY < 0 || minY > height) { markLineRendered('Processing lines...'); continue; }
-                        
-                        const screenPoints = [];
-                        for (let j = 0; j < precalc.length; j++) { 
-                            const pt = precalc[j]; 
-                            let visible = pt.inFrustum; 
-                            if (!visible) { screenPoints.push({ visible: false }); continue; } 
-                            if (isClipped(pt.vWorld)) visible = false; 
-                            else if (isHiddenLine && meshSolid) {
-                                const occluded = checkOcclusion(pt.vWorld, pt.dist);
-                                visible = (occluded === state.hiddenSettings.invert);
-                            }
-                            screenPoints.push(visible ? { x: pt.p.x, y: pt.p.y, dist: pt.dist, vWorld: pt.vWorld, visible: true } : { visible: false }); 
-                        }
-                        
-                        let currentPath = [];
-                        const flushPath = () => {
-                            if (currentPath.length < 2) { currentPath = []; return; }
-                            const avgDist = currentPath.reduce((acc, p) => acc + p.dist, 0) / currentPath.length; 
-                            const centerIdx = Math.floor(currentPath.length / 2);
-                            const { col, op, scale } = getStyle(avgDist, currentPath[centerIdx].vWorld, splineData.lineValue);
-                            
-                            const sw = state.strokeWidth * scale;
-                            if (op <= 0.001) { currentPath = []; return; }
-                            let d = `M ${currentPath[0].x.toFixed(1)},${currentPath[0].y.toFixed(1)}`;
-                            for (let k = 0; k < currentPath.length - 1; k++) d += ' ' + getBezierCommand(currentPath[Math.max(0, k - 1)], currentPath[k], currentPath[k + 1], currentPath[Math.min(currentPath.length - 1, k + 2)]);
-                            
-                            const pathStr = `<path d="${d}" fill="none" stroke="${col}" stroke-width="${sw.toFixed(2)}" stroke-opacity="${op.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>`;
-                            if (!state.properOrder) {
-                                if (shouldSeparateUV) {
-                                    if (splineData.direction === 'u') groupOutputU += pathStr;
-                                    else if (splineData.direction === 'v') groupOutputV += pathStr;
-                                    else groupOutput += pathStr;
-                                } else {
-                                    groupOutput += pathStr;
-                                }
-                            } 
-                            reportLineSegment(pathStr);
-                            currentPath = [];
-                        };
-                        for (let j = 0; j < screenPoints.length; j++) { if (screenPoints[j].visible) currentPath.push(screenPoints[j]); else flushPath(); } flushPath();
+                    const curve = new THREE.CatmullRomCurve3(rawPoints); 
+                    curve.closed = splineData.closed;
+                    const densePoints = curve.getPoints(rawPoints.length * state.hiddenSettings.splineRes);
+
+                    for(let j = 0; j < densePoints.length - 1; j++) {
+                        traceSegmentRecursive(densePoints[j], densePoints[j+1], 0, true, splineData.lineValue);
                     }
+
+                    if (!state.properOrder) {
+                        const batchSVG = optimizeAndRenderPaths(rawSegments);
+                        if (batchSVG) {
+                            if (shouldSeparateUV) {
+                                const direction = splines[i] && splines[i].direction;
+                                if (direction === 'u') groupOutputU += batchSVG;
+                                else if (direction === 'v') groupOutputV += batchSVG;
+                                else groupOutput += batchSVG;
+                            } else {
+                                output += batchSVG;
+                            }
+                        }
+                    }
+                    rawSegments.length = 0;
                     markLineRendered('Processing lines...');
-
-                } else {
-                    // === DENSE / RECURSIVE PATH ===
-                    const isPreciseFast = state.occlusionMethod === 'precise-fast';
-                    
-                    for (let i = 0; i < splines.length; i++) {
-                         await smartYield(); 
-                         const splineData = splines[i], rawPoints = splineData.points;
-                         if(rawPoints.length < 2) { markLineRendered('Processing lines...'); continue; }
-
-                         const curve = new THREE.CatmullRomCurve3(rawPoints); 
-                         curve.closed = splineData.closed;
-                         const densePoints = curve.getPoints(rawPoints.length * state.hiddenSettings.splineRes);
-
-                         if (isPreciseFast) {
-                             // --- HIGHLY OPTIMIZED FAST PRECISE PATH (Stride Sampling) ---
-                             const processed = [];
-                             for (let j = 0; j < densePoints.length; j++) {
-                                 const p = densePoints[j];
-                                 const w = new THREE.Vector3().copy(p).applyMatrix4(matWorld);
-                                 const c = new THREE.Vector3().copy(w).applyMatrix4(matView);
-                                 const scr = project(c);
-                                 const dist = camPos.distanceTo(w);
-                                 processed.push({ w, scr, dist, behind: c.z > -near, out: (scr.x < 0 || scr.x > width || scr.y < 0 || scr.y > height), vis: null });
-                             }
-
-                             const STRIDE = 4;
-                             for (let j = 0; j < processed.length - 1; j += STRIDE) {
-                                 const endIdx = Math.min(j + STRIDE, processed.length - 1);
-                                 const pStart = processed[j], pEnd = processed[endIdx];
-
-                                 if (pStart.vis === null) pStart.vis = isHiddenLine ? (checkOcclusion(pStart.w, pStart.dist) === state.hiddenSettings.invert) : true;
-                                 if (pEnd.vis === null) pEnd.vis = isHiddenLine ? (checkOcclusion(pEnd.w, pEnd.dist) === state.hiddenSettings.invert) : true;
-
-                                 if (pStart.vis && pEnd.vis) {
-                                     // Entire block is visible
-                                     for (let k = j; k < endIdx; k++) {
-                                         const s1 = processed[k], s2 = processed[k+1];
-                                         if (isClipped(s1.w) || isClipped(s2.w)) continue;
-                                         if (s1.out && s2.out) continue;
-                                         collectLine(s1.scr, s2.scr, (s1.dist + s2.dist) / 2, _mid.copy(s1.w).lerp(s2.w, 0.5), true, splineData.lineValue);
-                                     }
-                                 } else if (!pStart.vis && !pEnd.vis) {
-                                     // Block might be hidden or tunneling
-                                     const midIdx = Math.floor((j + endIdx) / 2);
-                                     const pMid = processed[midIdx];
-                                     if (pMid.vis === null) pMid.vis = isHiddenLine ? (checkOcclusion(pMid.w, pMid.dist) === state.hiddenSettings.invert) : true;
-                                     
-                                     if (pMid.vis) { // Tunneling detected, re-process with smaller steps
-                                         for (let k = j; k < endIdx; k++) {
-                                             const s1 = processed[k], s2 = processed[k+1];
-                                             if (s1.vis === null) s1.vis = isHiddenLine ? (checkOcclusion(s1.w, s1.dist) === state.hiddenSettings.invert) : true;
-                                             if (s2.vis === null) s2.vis = isHiddenLine ? (checkOcclusion(s2.w, s2.dist) === state.hiddenSettings.invert) : true;
-                                             if (s1.vis || s2.vis) {
-                                                 const wM = _mid.copy(s1.w).lerp(s2.w, 0.5);
-                                                 const dM = (s1.dist + s2.dist) / 2;
-                                                 if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
-                                                 else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
-                                             }
-                                         }
-                                     }
-                                 } else {
-                                     // Mixed visibility - transition zone
-                                     for (let k = j; k < endIdx; k++) {
-                                         const s1 = processed[k], s2 = processed[k+1];
-                                         if (s1.vis === null) s1.vis = isHiddenLine ? (checkOcclusion(s1.w, s1.dist) === state.hiddenSettings.invert) : true;
-                                         if (s2.vis === null) s2.vis = isHiddenLine ? (checkOcclusion(s2.w, s2.dist) === state.hiddenSettings.invert) : true;
-                                         if (s1.vis || s2.vis) {
-                                             const wM = _mid.copy(s1.w).lerp(s2.w, 0.5);
-                                             const dM = (s1.dist + s2.dist) / 2;
-                                             if (s1.vis && s2.vis) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
-                                             else if ((checkOcclusion(wM, dM) === state.hiddenSettings.invert)) collectLine(s1.scr, s2.scr, dM, wM, true, splineData.lineValue);
-                                         }
-                                     }
-                                 }
-                             }
-                         } else {
-                             // --- STANDARD DENSE PATH (NOW SMOOTH RECURSIVE) ---
-                             for(let j=0; j < densePoints.length - 1; j++) {
-                                 traceSegmentRecursive(densePoints[j], densePoints[j+1], 0, true, splineData.lineValue);
-                             }
-                         }
-
-                        if (!state.properOrder) {
-                          const batchSVG = optimizeAndRenderPaths(rawSegments);
-                          if (batchSVG) {
-                              if (shouldSeparateUV) {
-                                  const direction = splines[i] && splines[i].direction;
-                                  if (direction === 'u') groupOutputU += batchSVG;
-                                  else if (direction === 'v') groupOutputV += batchSVG;
-                                  else groupOutput += batchSVG;
-                              } else {
-                                  output += batchSVG;
-                              }
-                          }
-                      }
-                      rawSegments.length = 0;
-                      markLineRendered('Processing lines...');
-                      }
-
-   
-
-                  }
+                }
                   if (!state.properOrder) {
                       if (shouldSeparateUV && groupOutputU.length > 0) output += `<g id="${group.name}_U_lines">${groupOutputU}</g>`;
                       if (shouldSeparateUV && groupOutputV.length > 0) output += `<g id="${group.name}_V_lines">${groupOutputV}</g>`;
@@ -3914,7 +3769,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   const p = project(c1); 
                   if (p.x < 0 || p.x > width || p.y < 0 || p.y > height) continue;
                   const dist = camPos.distanceTo(vVec);
-                  if (checkOcclusion(vVec, dist) === state.hiddenSettings.invert) {
+                  if (checkOcclusion(vVec) === state.hiddenSettings.invert) {
                       const { col, op, scale } = getStyle(dist, vVec, data.lineVal);
                       const r = (state.dotSize * scale) / 2;
                       if(op > 0.001 && r > 0.1) {
@@ -3966,7 +3821,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             let finalSVG = '';
-            const precision = 3;
+            let pathCount = 0;
+            const precision = 1;
 
             if (state.properOrder) {
                 for (const seg of segments) {
@@ -3976,11 +3832,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const isSpline = seg.isSpline;
 
                     let pathD = `M ${seg.p1.x.toFixed(3)},${seg.p1.y.toFixed(3)} L ${seg.p2.x.toFixed(3)},${seg.p2.y.toFixed(3)}`;
+                    pathCount++;
                     const pathStr = `<path d="${pathD}" fill="none" stroke="${col}" stroke-width="${width}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
                     finalSVG += pathStr;
                     reportLineSegment(pathStr);
                 }
-                return finalSVG;
+                if (pathCount > 1) {
+                console.log("DEBUG: Generated " + pathCount + " paths for signature!");
+            }
+            return finalSVG;
             }
 
             const groups = {};
@@ -3997,9 +3857,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const map = new Map();
 
                 groupSegs.forEach(seg => {
-                    const key = `${seg.p1.x.toFixed(precision)},${seg.p1.y.toFixed(precision)}`;
-                    if(!map.has(key)) map.set(key, []);
-                    map.get(key).push(seg);
+                    const key1 = `${seg.p1.x.toFixed(precision)},${seg.p1.y.toFixed(precision)}`;
+                    const key2 = `${seg.p2.x.toFixed(precision)},${seg.p2.y.toFixed(precision)}`;
+                    if(!map.has(key1)) map.set(key1, []);
+                    map.get(key1).push(seg);
+                    if(!map.has(key2)) map.set(key2, []);
+                    map.get(key2).push(seg);
                 });
 
                 const visited = new Set();
@@ -4008,32 +3871,47 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (visited.has(seg)) continue;
                     const pathPoints = [seg.p1, seg.p2];
                     visited.add(seg);
+                    
+                    // Trace forward
                     let currentTail = seg.p2;
-
                     while(true) {
                         const tailKey = `${currentTail.x.toFixed(precision)},${currentTail.y.toFixed(precision)}`;
                         const candidates = map.get(tailKey);
                         let nextSeg = null;
                         if (candidates) {
                             for (let c of candidates) {
-                                if (!visited.has(c)) {
-                                    nextSeg = c;
-                                    break;
-                                }
+                                if (!visited.has(c)) { nextSeg = c; break; }
                             }
                         }
                         if (nextSeg) {
-                            pathPoints.push(nextSeg.p2);
+                            const k1 = `${nextSeg.p1.x.toFixed(precision)},${nextSeg.p1.y.toFixed(precision)}`;
+                            if (k1 === tailKey) { pathPoints.push(nextSeg.p2); currentTail = nextSeg.p2; }
+                            else { pathPoints.push(nextSeg.p1); currentTail = nextSeg.p1; }
                             visited.add(nextSeg);
-                            currentTail = nextSeg.p2;
-                        } else {
-                            break;
+                        } else break;
+                    }
+
+                    // Trace backward
+                    let currentHead = seg.p1;
+                    while(true) {
+                        const headKey = `${currentHead.x.toFixed(precision)},${currentHead.y.toFixed(precision)}`;
+                        const candidates = map.get(headKey);
+                        let nextSeg = null;
+                        if (candidates) {
+                            for (let c of candidates) {
+                                if (!visited.has(c)) { nextSeg = c; break; }
+                            }
                         }
+                        if (nextSeg) {
+                            const k1 = `${nextSeg.p1.x.toFixed(precision)},${nextSeg.p1.y.toFixed(precision)}`;
+                            if (k1 === headKey) { pathPoints.unshift(nextSeg.p2); currentHead = nextSeg.p2; }
+                            else { pathPoints.unshift(nextSeg.p1); currentHead = nextSeg.p1; }
+                            visited.add(nextSeg);
+                        } else break;
                     }
                     
                     let pathD = `M ${pathPoints[0].x.toFixed(3)},${pathPoints[0].y.toFixed(3)}`;
-                    // Use Beziers only for long-segment splines to avoid "doubly-interpolated" wobbles on dense paths
-                    const useBeziers = isSpline && pathPoints.length > 2 && (pathPoints.length < 50); 
+                    const useBeziers = isSpline && pathPoints.length > 2; 
                     
                     if (useBeziers) {
                         for (let k = 0; k < pathPoints.length - 1; k++) {
@@ -4044,13 +3922,75 @@ document.addEventListener('DOMContentLoaded', () => {
                             pathD += ` L ${pathPoints[k].x.toFixed(3)},${pathPoints[k].y.toFixed(3)}`;
                         }
                     }
+                    pathCount++;
                     const pathStr = `<path d="${pathD}" fill="none" stroke="${col}" stroke-width="${width}" stroke-opacity="${op}" stroke-linecap="round" stroke-linejoin="round"/>`;
                     finalSVG += pathStr;
                     reportLineSegment(pathStr);
                 }
             }
+            if (pathCount > 1) {
+                console.log("DEBUG: Generated " + pathCount + " paths for signature!");
+            }
             return finalSVG;
         }
+
+        if (state.hiddenSettings.silhouette && (state.style === 'hidden-line' || state.style === 'triangles')) {
+            pushProgress(85, 'Extracting Silhouette...');
+            if (meshSolid && meshSolid.geometry && meshSolid.geometry.index) {
+                const geo = meshSolid.geometry;
+                const pos = geo.attributes.position;
+                const idx = geo.index;
+                const faceNormals = [];
+                const edges = {}; 
+                const _vA = new THREE.Vector3(), _vB = new THREE.Vector3(), _vC = new THREE.Vector3(), _cb = new THREE.Vector3(), _ab = new THREE.Vector3();
+                
+                for (let i = 0; i < idx.count; i += 3) {
+                    const a = idx.getX(i), b = idx.getX(i+1), c = idx.getX(i+2);
+                    _vA.fromBufferAttribute(pos, a).applyMatrix4(matWorld);
+                    _vB.fromBufferAttribute(pos, b).applyMatrix4(matWorld);
+                    _vC.fromBufferAttribute(pos, c).applyMatrix4(matWorld);
+                    
+                    _cb.subVectors(_vC, _vB);
+                    _ab.subVectors(_vA, _vB);
+                    _cb.cross(_ab);
+                    
+                    const centerX = (_vA.x + _vB.x + _vC.x) / 3;
+                    const centerY = (_vA.y + _vB.y + _vC.y) / 3;
+                    const centerZ = (_vA.z + _vB.z + _vC.z) / 3;
+                    
+                    let dot = 0;
+                    if (camera.isPerspectiveCamera) {
+                        dot = _cb.x * (camPos.x - centerX) + _cb.y * (camPos.y - centerY) + _cb.z * (camPos.z - centerZ);
+                    } else {
+                        const toCam = new THREE.Vector3(0,0,1).applyMatrix4(camera.matrixWorld).sub(camera.position).normalize();
+                        dot = _cb.dot(toCam);
+                    }
+                    
+                    faceNormals[i/3] = dot > 0;
+                    
+                    const addEdge = (u, v) => {
+                        const key = (u < v) ? `${u}_${v}` : `${v}_${u}`;
+                        if (!edges[key]) edges[key] = { u, v, f1: i/3, f2: -1 };
+                        else edges[key].f2 = i/3;
+                    };
+                    addEdge(a, b); addEdge(b, c); addEdge(c, a);
+                }
+                
+                for (let key in edges) {
+                    const e = edges[key];
+                    let isSilhouette = false;
+                    if (e.f2 === -1) isSilhouette = faceNormals[e.f1];
+                    else isSilhouette = faceNormals[e.f1] !== faceNormals[e.f2];
+                    
+                    if (isSilhouette) {
+                        _p1.fromBufferAttribute(pos, e.u);
+                        _p2.fromBufferAttribute(pos, e.v);
+                        traceSegmentRecursive(_p1, _p2, 0, false, -999.0);
+                    }
+                }
+            }
+        }
+
 
         pushProgress(90, 'Optimizing paths...');
         
