@@ -220,10 +220,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const container = document.getElementById('canvas-container');
     let scene, camera, renderer, controls;
+    let transformControl, transformParent, transformProxy;
     let mainMeshGroup = null;
     let originalGeometry = null; 
     let simplex = new SimplexNoise();
     let matWireShader = null; 
+    let sceneGridHelper = null;
 
     const presets = [null, null, null, null, null];
     const sphereTypes = ['sphere', 'sphere-circles', 'sphere-geodesic', 'sphere-spiral', 'sphere-hexagonal', 'sphere-lissajous', 'sphere-voronoi', 'sphere-hopf', 'sphere-diagonal', 'sphere-loxodrome', 'icosahedron', 'tetrahedron', 'octahedron', 'dodecahedron'];
@@ -327,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mathFormula: 'sin(x*a) * cos(z*b) * c',
             mathVars: { a: 1.0, b: 1.0, c: 1.0 },
             parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
-            landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9 }
+            landscape: { seed: 68, noiseType: 'island-simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, fadeRadius: 0.5 }
         }],
         activeGeoId: null,
         geoType: 'cube', 
@@ -339,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mathFormula: 'sin(x*a) * cos(z*b) * c',
         mathVars: { a: 1.0, b: 1.0, c: 1.0 },
         parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
-        landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9 },
+        landscape: { seed: 68, noiseType: 'island-simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, fadeRadius: 0.5 },
         objRot: { x: 0, y: 0, z: 0 },
         clip: { enabled: false, axis: 'x', pos: 0 },
         spline: { force: false, subdiv: 12 },
@@ -1108,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     mathFormula: 'sin(x*a) * cos(z*b) * c',
                     mathVars: { a: 1.0, b: 1.0, c: 1.0 },
                     parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
-                    landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9 }
+                    landscape: { seed: 68, noiseType: 'island-simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, fadeRadius: 0.5 }
                 };
                 state.geometries.push(newGeo);
                 syncActiveGeometryToState(newGeo.id);
@@ -1139,17 +1141,68 @@ document.addEventListener('DOMContentLoaded', () => {
         scene = new THREE.Scene(); 
         scene.background = new THREE.Color(0x111111);
         scene.fog = new THREE.FogExp2(0x111111, 0.03);
-        const gridHelper = new THREE.GridHelper(100, 100, 0x333333, 0x333333);
-        gridHelper.position.y = -5;
-        gridHelper.material.opacity = 0.5;
-        gridHelper.material.transparent = true;
-        scene.add(gridHelper);
+        sceneGridHelper = new THREE.GridHelper(100, 100, 0x333333, 0x333333);
+        sceneGridHelper.position.y = -5;
+        sceneGridHelper.material.opacity = 0.5;
+        sceneGridHelper.material.transparent = true;
+        scene.add(sceneGridHelper);
         const aspect = container.clientWidth / container.clientHeight;
         camera = new THREE.PerspectiveCamera(state.cam.fov, aspect, 0.1, 1000); camera.position.set(state.cam.x, state.cam.y, state.cam.z);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setSize(container.clientWidth, container.clientHeight); renderer.setPixelRatio(window.devicePixelRatio); renderer.localClippingEnabled = true; container.appendChild(renderer.domElement);
         controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.dampingFactor = 0.4; controls.autoRotate = state.autoRotate; controls.autoRotateSpeed = 2.0;
         
         if(state.cam.target) controls.target.set(state.cam.target.x, state.cam.target.y, state.cam.target.z);
+
+        transformParent = new THREE.Group();
+        scene.add(transformParent);
+        transformProxy = new THREE.Group();
+        transformParent.add(transformProxy);
+        transformControl = new THREE.TransformControls(camera, renderer.domElement);
+        transformControl.addEventListener('dragging-changed', function (event) {
+            controls.enabled = !event.value;
+        });
+        transformControl.addEventListener('change', function () {
+            if (transformControl.dragging) {
+                state.geoPos.x = transformProxy.position.x;
+                state.geoPos.y = transformProxy.position.y;
+                state.geoPos.z = transformProxy.position.z;
+                state.geoRot.x = THREE.MathUtils.radToDeg(transformProxy.rotation.x);
+                state.geoRot.y = THREE.MathUtils.radToDeg(transformProxy.rotation.y);
+                state.geoRot.z = THREE.MathUtils.radToDeg(transformProxy.rotation.z);
+                state.geoScl.x = transformProxy.scale.x;
+                state.geoScl.y = transformProxy.scale.y;
+                state.geoScl.z = transformProxy.scale.z;
+                
+                document.getElementById('geo-pos-x').value = state.geoPos.x.toFixed(2);
+                document.getElementById('geo-pos-y').value = state.geoPos.y.toFixed(2);
+                document.getElementById('geo-pos-z').value = state.geoPos.z.toFixed(2);
+                document.getElementById('geo-rot-x').value = state.geoRot.x.toFixed(2);
+                document.getElementById('geo-rot-y').value = state.geoRot.y.toFixed(2);
+                document.getElementById('geo-rot-z').value = state.geoRot.z.toFixed(2);
+                document.getElementById('geo-scl-x').value = state.geoScl.x.toFixed(2);
+                document.getElementById('geo-scl-y').value = state.geoScl.y.toFixed(2);
+                document.getElementById('geo-scl-z').value = state.geoScl.z.toFixed(2);
+                
+                updateGeometry(true);
+            }
+        });
+        scene.add(transformControl);
+        transformControl.attach(transformProxy);
+        transformControl.enabled = false;
+        transformControl.visible = false;
+        
+        document.getElementById('btn-gizmo-off').addEventListener('click', () => {
+            transformControl.enabled = false; transformControl.visible = false;
+        });
+        document.getElementById('btn-gizmo-translate').addEventListener('click', () => {
+            transformControl.setMode('translate'); transformControl.enabled = true; transformControl.visible = true;
+        });
+        document.getElementById('btn-gizmo-rotate').addEventListener('click', () => {
+            transformControl.setMode('rotate'); transformControl.enabled = true; transformControl.visible = true;
+        });
+        document.getElementById('btn-gizmo-scale').addEventListener('click', () => {
+            transformControl.setMode('scale'); transformControl.enabled = true; transformControl.visible = true;
+        });
         
         const ambient = new THREE.AmbientLight(0x404040); scene.add(ambient);
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(5, 10, 7); scene.add(dirLight);
@@ -1415,7 +1468,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syncInput('smooth-iters', 'val-smooth-iters', (v) => { state.smooth.iters = parseInt(v, 10); updateGeometry(); });
 
         syncInput('landscape-seed', 'val-landscape-seed', (v) => { state.landscape.seed = parseInt(v); updateGeometry(); });
-        document.getElementById('landscape-noise-type').addEventListener('change', (e) => { saveHistory(); state.landscape.noiseType = e.target.value; updateGeometry(); });
+        document.getElementById('landscape-noise-type').addEventListener('change', (e) => { saveHistory(); state.landscape.noiseType = e.target.value; setDisplay('landscape-fade-radius-container', e.target.value === 'island-simplex'); updateGeometry(); });
         syncInput('landscape-amp', 'val-landscape-amp', (v) => { state.landscape.amplitude = parseFloat(v); updateGeometry(); });
         syncInput('landscape-freq', 'val-landscape-freq', (v) => { state.landscape.frequency = parseFloat(v); updateGeometry(); });
         syncInput('landscape-octaves', 'val-landscape-octaves', (v) => { state.landscape.octaves = parseInt(v); updateGeometry(); });
@@ -1423,6 +1476,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syncInput('landscape-lacunarity', 'val-landscape-lacunarity', (v) => { state.landscape.lacunarity = parseFloat(v); updateGeometry(); });
         syncInput('landscape-sea-level', 'val-landscape-sea-level', (v) => { state.landscape.seaLevel = parseFloat(v); updateGeometry(); });
         syncInput('landscape-noise-scale', 'val-landscape-noise-scale', (v) => { state.landscape.noiseScale = parseFloat(v); updateGeometry(); });
+        syncInput('landscape-fade-radius', 'val-landscape-fade-radius', (v) => { state.landscape.fadeRadius = parseFloat(v); updateGeometry(); });
 
         document.getElementById('noise-axis').addEventListener('change', (e) => { saveHistory(); state.noise.axis = e.target.value; updateGeometry(); });
         document.getElementById('noise-type').addEventListener('change', (e) => { saveHistory(); state.noise.noiseType = e.target.value; updateGeometry(); });
@@ -1583,6 +1637,17 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        const gradReverse = document.getElementById('gradient-reverse');
+        if (gradReverse) {
+            gradReverse.addEventListener('click', () => {
+                if (!state.colorStops) return;
+                saveHistory();
+                state.colorStops.forEach(s => s.p = 1.0 - s.p);
+                state.colorStops.sort((a, b) => a.p - b.p);
+                if (window.updateGradientEditorUI) window.updateGradientEditorUI();
+            });
+        }
+
         const gradStopsArea = document.getElementById('grad-stops-area');
         const gradCanvas = document.getElementById('grad-canvas');
         const gradCtx = gradCanvas ? gradCanvas.getContext('2d', { willReadFrequently: true }) : null;
@@ -1712,6 +1777,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     state.lineGradient.stops = JSON.parse(JSON.stringify(colorPresets[val]));
                     if (window.updateLineGradientEditorUI) window.updateLineGradientEditorUI();
                 }
+            });
+        }
+
+        const lineGradReverse = document.getElementById('line-gradient-reverse');
+        if (lineGradReverse) {
+            lineGradReverse.addEventListener('click', () => {
+                if (!state.lineGradient.stops) return;
+                saveHistory();
+                state.lineGradient.stops.forEach(s => s.p = 1.0 - s.p);
+                state.lineGradient.stops.sort((a, b) => a.p - b.p);
+                if (window.updateLineGradientEditorUI) window.updateLineGradientEditorUI();
             });
         }
 
@@ -1981,6 +2057,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setVal('visual-style', state.style);
         const showHl = ['hidden-line', 'triangles', 'wireframe'].includes(state.style); setDisplay('hidden-line-settings', showHl);
         const isHalftone = state.style === 'halftone'; setDisplay('halftone-settings', isHalftone);
+        if (sceneGridHelper) sceneGridHelper.visible = !isHalftone;
         const isCheckerboard = state.style === 'checkerboard'; setDisplay('checkerboard-settings', isCheckerboard);
 
         setVal('ht-grid', state.halftone.grid); setVal('val-ht-grid', state.halftone.grid);
@@ -2047,7 +2124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setCheck('use-clip', state.clip.enabled); setDisplay('clip-controls', state.clip.enabled); setVal('clip-axis', state.clip.axis); setVal('clip-pos', state.clip.pos); setVal('val-clip-pos', state.clip.pos);
         setVal('math-formula', state.mathFormula); setVal('math-var-a', state.mathVars.a); setVal('math-var-b', state.mathVars.b); setVal('math-var-c', state.mathVars.c);
         setVal('param-x', state.parametricFormulas.x); setVal('param-y', state.parametricFormulas.y); setVal('param-z', state.parametricFormulas.z);
-        setVal('landscape-seed', state.landscape.seed); setVal('val-landscape-seed', state.landscape.seed); setVal('landscape-noise-type', state.landscape.noiseType); setVal('landscape-amp', state.landscape.amplitude); setVal('val-landscape-amp', state.landscape.amplitude); setVal('landscape-freq', state.landscape.frequency); setVal('val-landscape-freq', state.landscape.frequency); setVal('landscape-octaves', state.landscape.octaves); setVal('val-landscape-octaves', state.landscape.octaves); setVal('landscape-persistence', state.landscape.persistence); setVal('val-landscape-persistence', state.landscape.persistence); setVal('landscape-lacunarity', state.landscape.lacunarity); setVal('val-landscape-lacunarity', state.landscape.lacunarity); setVal('landscape-sea-level', state.landscape.seaLevel); setVal('val-landscape-sea-level', state.landscape.seaLevel); setVal('landscape-noise-scale', state.landscape.noiseScale); setVal('val-landscape-noise-scale', state.landscape.noiseScale);
+        setVal('landscape-seed', state.landscape.seed); setVal('val-landscape-seed', state.landscape.seed); setVal('landscape-noise-type', state.landscape.noiseType); setVal('landscape-amp', state.landscape.amplitude); setVal('val-landscape-amp', state.landscape.amplitude); setVal('landscape-freq', state.landscape.frequency); setVal('val-landscape-freq', state.landscape.frequency); setVal('landscape-octaves', state.landscape.octaves); setVal('val-landscape-octaves', state.landscape.octaves); setVal('landscape-persistence', state.landscape.persistence); setVal('val-landscape-persistence', state.landscape.persistence); setVal('landscape-lacunarity', state.landscape.lacunarity); setVal('val-landscape-lacunarity', state.landscape.lacunarity); setVal('landscape-sea-level', state.landscape.seaLevel); setVal('val-landscape-sea-level', state.landscape.seaLevel); setVal('landscape-noise-scale', state.landscape.noiseScale); setVal('val-landscape-noise-scale', state.landscape.noiseScale); setDisplay('landscape-fade-radius-container', state.landscape.noiseType === 'island-simplex'); setVal('landscape-fade-radius', state.landscape.fadeRadius !== undefined ? state.landscape.fadeRadius : 0.5); setVal('val-landscape-fade-radius', state.landscape.fadeRadius !== undefined ? state.landscape.fadeRadius : 0.5);
         setVal('cam-rot-x', state.cam.rotX); setVal('cam-rot-y', state.cam.rotY);
 
         document.querySelectorAll('.preset-btn').forEach((btn, idx) => {
@@ -2086,16 +2163,29 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'value': noiseGenerator = new ValueNoise(rng); break;
             case 'turbulence': noiseGenerator = new TurbulenceNoise(SimplexNoise, rng); break;
             case 'ridged': noiseGenerator = new RidgedMultifractalNoise(SimplexNoise, rng); break;
+            case 'island-simplex': noiseGenerator = new SimplexNoise(rng); break;
             case 'simplex': default: noiseGenerator = new SimplexNoise(rng); break;
         }
         const amplitude = landscapeState.amplitude, octaves = landscapeState.octaves, persistence = landscapeState.persistence, lacunarity = landscapeState.lacunarity, seaLevel = landscapeState.seaLevel, noiseScale = landscapeState.noiseScale;
         const offsetX = rng() * 10000, offsetZ = rng() * 10000;
+        const fadeRadius = landscapeState.fadeRadius !== undefined ? landscapeState.fadeRadius : 0.5;
+        const maxDist = Math.min(width/2, height/2);
         for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i), z = pos.getY(i);
             let y = 0, currentAmplitude = amplitude, currentFrequency = landscapeState.frequency;
             for (let j = 0; j < octaves; j++) {
                 y += noiseGenerator.noise3D((x * currentFrequency * noiseScale) + offsetX, (z * currentFrequency * noiseScale) + offsetZ, 0) * currentAmplitude;
                 currentAmplitude *= persistence; currentFrequency *= lacunarity;
+            }
+            if (landscapeState.noiseType === 'island-simplex') {
+                const dist = Math.sqrt(x*x + z*z);
+                const fadeStart = maxDist * fadeRadius;
+                if (dist > fadeStart) {
+                    const fadeRange = Math.max(0.0001, maxDist - fadeStart);
+                    const t = Math.max(0, Math.min(1, (dist - fadeStart) / fadeRange));
+                    const smoothstep = t * t * (3 - 2 * t);
+                    y = y * (1 - smoothstep);
+                }
             }
             if (y < seaLevel) y = seaLevel;
             pos.setXYZ(i, x, y, z);
@@ -2646,7 +2736,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     
     
-    function updateGeometry() {
+    function updateGeometry(fromGizmo = false) {
         if (mainMeshGroup) { scene.remove(mainMeshGroup); if (mainMeshGroup.userData.dispose) mainMeshGroup.userData.dispose(); }
 
         syncStateToActiveGeometry();
@@ -2968,6 +3058,13 @@ document.addEventListener('DOMContentLoaded', () => {
         mainMeshGroup.userData.solid = meshSolid; mainMeshGroup.userData.wire = meshWire; mainMeshGroup.userData.clipPlane = clipPlanes.length > 0 ? clipPlanes[0] : null;
         mainMeshGroup.userData.dispose = () => { finalGeoWire.dispose(); if(finalGeoSolid && finalGeoSolid !== finalGeoWire) finalGeoSolid.dispose(); if(meshSolid) meshSolid.material.dispose(); if(meshWire.geometry) meshWire.geometry.dispose(); if(meshWire.material) meshWire.material.dispose(); };
         scene.add(mainMeshGroup);
+
+        if (!fromGizmo && typeof transformProxy !== 'undefined' && transformParent) {
+            transformParent.rotation.set(THREE.MathUtils.degToRad(state.objRot.x), THREE.MathUtils.degToRad(state.objRot.y), THREE.MathUtils.degToRad(state.objRot.z));
+            transformProxy.position.set(state.geoPos.x, state.geoPos.y, state.geoPos.z);
+            transformProxy.rotation.set(THREE.MathUtils.degToRad(state.geoRot.x), THREE.MathUtils.degToRad(state.geoRot.y), THREE.MathUtils.degToRad(state.geoRot.z));
+            transformProxy.scale.set(state.geoScl.x, state.geoScl.y, state.geoScl.z);
+        }
 
         document.getElementById('poly-count').textContent = `${finalGeoWire.attributes.position ? finalGeoWire.attributes.position.count / 3 | 0 : 0} tris${anySplineCount ? ' (splines)' : ''}`;
         if(state.svgPreview) disableSVGPreview();
