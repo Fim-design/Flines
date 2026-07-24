@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Extensions -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/OBJLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
 </head>
@@ -283,7 +284,7 @@
                         <div class="control">
                             <label>Noise Type</label>
                             <select id="landscape-noise-type">
-                                <option value="simplex">Simplex Noise</option>
+                                <option value="island-simplex">Island (Simplex)</option>
                                 <option value="perlin">Perlin Noise</option>
                                 <option value="worley">Worley Noise</option>
                                 <option value="voronoi">Voronoi Noise</option>
@@ -291,6 +292,13 @@
                                 <option value="turbulence">Turbulence Noise</option>
                                 <option value="ridged">Ridged Multifractal Noise</option>
                             </select>
+                        </div>
+                        <div class="control" id="landscape-fade-radius-container">
+                            <label>Fade Radius</label>
+                            <div class="range-row">
+                                <input type="range" id="landscape-fade-radius" min="0" max="1" step="0.01" value="0.5">
+                                <input type="number" id="val-landscape-fade-radius" class="val-input" value="0.5">
+                            </div>
                         </div>
                         <div class="control">
                             <label>Noise Scale</label>
@@ -872,8 +880,8 @@
                             <div class="sub-controls" id="line-gradient-controls" style="display:none;">
                                 <div id="line-gradient-colors" style="padding: 12px; background: #2a2a2a; border-radius: 6px;">
                                     <label style="margin-bottom:8px; display:block;">Gradient Map (Start &rarr; End)</label>
-                                    <div style="margin-bottom: 8px;">
-                                        <select id="line-gradient-presets" style="width: 100%; padding: 4px; font-size: 11px; background: #333; color: white; border: 1px solid #444;">
+                                    <div style="margin-bottom: 8px; display: flex; gap: 4px;">
+                                        <select id="line-gradient-presets" style="flex: 1; padding: 4px; font-size: 11px; background: #333; color: white; border: 1px solid #444;">
                                             <option value="custom">Custom</option>
                                             <option value="heatmap">Heatmap</option>
                                             <option value="rainbow">Rainbow</option>
@@ -893,6 +901,7 @@
                                             <option value="twilight">Twilight</option>
                                             <option value="candy">Candy</option>
                                         </select>
+                                        <button id="line-gradient-reverse" title="Reverse Gradient" style="background: #333; color: white; border: 1px solid #444; padding: 0 8px; cursor: pointer; border-radius: 2px;">⇄</button>
                                     </div>
                                     <div class="gradient-editor" id="line-grad-editor" style="position: relative; height: 24px; margin-bottom: 4px; cursor: crosshair;">
                                         <canvas id="line-grad-canvas" width="256" height="1" style="width: 100%; height: 100%; border-radius: 4px; border: 1px solid #444; image-rendering: pixelated;"></canvas>
@@ -925,8 +934,8 @@
                             <div class="sub-controls" id="z-color-controls" style="display:none;">
                                 <div id="gradient-colors" style="padding: 12px; background: #2a2a2a; border-radius: 6px;">
                                     <label style="margin-bottom:8px; display:block;">Gradient Map (Start &rarr; End)</label>
-                                        <div style="margin-bottom: 8px;">
-                                            <select id="gradient-presets" style="width: 100%; padding: 4px; font-size: 11px; background: #333; color: white; border: 1px solid #444;">
+                                        <div style="margin-bottom: 8px; display: flex; gap: 4px;">
+                                            <select id="gradient-presets" style="flex: 1; padding: 4px; font-size: 11px; background: #333; color: white; border: 1px solid #444;">
                                                 <option value="custom">Custom</option>
                                                 <option value="heatmap">Heatmap</option>
                                                 <option value="rainbow">Rainbow</option>
@@ -946,6 +955,7 @@
                                                 <option value="twilight">Twilight</option>
                                                 <option value="candy">Candy</option>
                                             </select>
+                                            <button id="gradient-reverse" title="Reverse Gradient" style="background: #333; color: white; border: 1px solid #444; padding: 0 8px; cursor: pointer; border-radius: 2px;">⇄</button>
                                         </div>
                                         <div class="gradient-editor" id="grad-editor" style="position: relative; height: 24px; margin-bottom: 4px; cursor: crosshair;">
                                             <canvas id="grad-canvas" width="256" height="1" style="width: 100%; height: 100%; border-radius: 4px; border: 1px solid #444; image-rendering: pixelated;"></canvas>
@@ -1114,6 +1124,12 @@
             <div id="canvas-container"></div>
             <div id="svg-container" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10;"></div>
             <div class="viewport-overlay">
+                <div id="gizmo-toolbar" style="display:flex; gap:5px; margin-bottom:10px; pointer-events:auto; background: rgba(0,0,0,0.5); padding: 5px; border-radius: 8px; border: 1px solid #333;">
+                    <button id="btn-gizmo-off" class="btn-primary" style="background:#007aff; padding:4px 8px; font-size:11px; margin:0; width:auto; border-radius:4px;">Off</button>
+                    <button id="btn-gizmo-translate" class="btn-primary" style="background:#444; padding:4px 8px; font-size:11px; margin:0; width:auto; border-radius:4px;">Move</button>
+                    <button id="btn-gizmo-rotate" class="btn-primary" style="background:#444; padding:4px 8px; font-size:11px; margin:0; width:auto; border-radius:4px;">Rotate</button>
+                    <button id="btn-gizmo-scale" class="btn-primary" style="background:#444; padding:4px 8px; font-size:11px; margin:0; width:auto; border-radius:4px;">Scale</button>
+                </div>
                 <div class="stats">
                     <span id="poly-count">0 tris</span>
                 </div>
