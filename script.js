@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mathFormula: 'sin(x*a) * cos(z*b) * c',
             mathVars: { a: 1.0, b: 1.0, c: 1.0 },
             parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
-            landscape: { seed: 68, noiseType: 'island-simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, fadeRadius: 0.5 }
+            landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, useFade: false, fadeRadius: 0.5 }
         }],
         activeGeoId: null,
         geoType: 'cube', 
@@ -341,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mathFormula: 'sin(x*a) * cos(z*b) * c',
         mathVars: { a: 1.0, b: 1.0, c: 1.0 },
         parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
-        landscape: { seed: 68, noiseType: 'island-simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, fadeRadius: 0.5 },
+        landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, useFade: false, fadeRadius: 0.5 },
         objRot: { x: 0, y: 0, z: 0 },
         clip: { enabled: false, axis: 'x', pos: 0 },
         spline: { force: false, subdiv: 12 },
@@ -1110,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     mathFormula: 'sin(x*a) * cos(z*b) * c',
                     mathVars: { a: 1.0, b: 1.0, c: 1.0 },
                     parametricFormulas: { x: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * cos(u)', y: '(2 + cos(u/2)*sin(v) - sin(u/2)*sin(2*v)) * sin(u)', z: 'sin(u/2)*sin(v) + cos(u/2)*sin(2*v)' },
-                    landscape: { seed: 68, noiseType: 'island-simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, fadeRadius: 0.5 }
+                    landscape: { seed: 68, noiseType: 'simplex', amplitude: 1.5, frequency: 0.05, octaves: 4, persistence: 0.5, lacunarity: 2.0, seaLevel: 0.0, noiseScale: 4.9, useFade: false, fadeRadius: 0.5 }
                 };
                 state.geometries.push(newGeo);
                 syncActiveGeometryToState(newGeo.id);
@@ -1468,7 +1468,8 @@ document.addEventListener('DOMContentLoaded', () => {
         syncInput('smooth-iters', 'val-smooth-iters', (v) => { state.smooth.iters = parseInt(v, 10); updateGeometry(); });
 
         syncInput('landscape-seed', 'val-landscape-seed', (v) => { state.landscape.seed = parseInt(v); updateGeometry(); });
-        document.getElementById('landscape-noise-type').addEventListener('change', (e) => { saveHistory(); state.landscape.noiseType = e.target.value; setDisplay('landscape-fade-radius-container', e.target.value === 'island-simplex'); updateGeometry(); });
+        document.getElementById('landscape-noise-type').addEventListener('change', (e) => { saveHistory(); state.landscape.noiseType = e.target.value; updateGeometry(); });
+        document.getElementById('landscape-use-fade').addEventListener('change', (e) => { saveHistory(); state.landscape.useFade = e.target.checked; setDisplay('landscape-fade-radius-container', e.target.checked); updateGeometry(); });
         syncInput('landscape-amp', 'val-landscape-amp', (v) => { state.landscape.amplitude = parseFloat(v); updateGeometry(); });
         syncInput('landscape-freq', 'val-landscape-freq', (v) => { state.landscape.frequency = parseFloat(v); updateGeometry(); });
         syncInput('landscape-octaves', 'val-landscape-octaves', (v) => { state.landscape.octaves = parseInt(v); updateGeometry(); });
@@ -2124,7 +2125,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setCheck('use-clip', state.clip.enabled); setDisplay('clip-controls', state.clip.enabled); setVal('clip-axis', state.clip.axis); setVal('clip-pos', state.clip.pos); setVal('val-clip-pos', state.clip.pos);
         setVal('math-formula', state.mathFormula); setVal('math-var-a', state.mathVars.a); setVal('math-var-b', state.mathVars.b); setVal('math-var-c', state.mathVars.c);
         setVal('param-x', state.parametricFormulas.x); setVal('param-y', state.parametricFormulas.y); setVal('param-z', state.parametricFormulas.z);
-        setVal('landscape-seed', state.landscape.seed); setVal('val-landscape-seed', state.landscape.seed); setVal('landscape-noise-type', state.landscape.noiseType); setVal('landscape-amp', state.landscape.amplitude); setVal('val-landscape-amp', state.landscape.amplitude); setVal('landscape-freq', state.landscape.frequency); setVal('val-landscape-freq', state.landscape.frequency); setVal('landscape-octaves', state.landscape.octaves); setVal('val-landscape-octaves', state.landscape.octaves); setVal('landscape-persistence', state.landscape.persistence); setVal('val-landscape-persistence', state.landscape.persistence); setVal('landscape-lacunarity', state.landscape.lacunarity); setVal('val-landscape-lacunarity', state.landscape.lacunarity); setVal('landscape-sea-level', state.landscape.seaLevel); setVal('val-landscape-sea-level', state.landscape.seaLevel); setVal('landscape-noise-scale', state.landscape.noiseScale); setVal('val-landscape-noise-scale', state.landscape.noiseScale); setDisplay('landscape-fade-radius-container', state.landscape.noiseType === 'island-simplex'); setVal('landscape-fade-radius', state.landscape.fadeRadius !== undefined ? state.landscape.fadeRadius : 0.5); setVal('val-landscape-fade-radius', state.landscape.fadeRadius !== undefined ? state.landscape.fadeRadius : 0.5);
+        const useFade = state.landscape.useFade !== undefined ? state.landscape.useFade : (state.landscape.noiseType === 'island-simplex');
+        const landscapeNoiseType = state.landscape.noiseType === 'island-simplex' ? 'simplex' : state.landscape.noiseType;
+        setVal('landscape-seed', state.landscape.seed); setVal('val-landscape-seed', state.landscape.seed); setVal('landscape-noise-type', landscapeNoiseType); setVal('landscape-amp', state.landscape.amplitude); setVal('val-landscape-amp', state.landscape.amplitude); setVal('landscape-freq', state.landscape.frequency); setVal('val-landscape-freq', state.landscape.frequency); setVal('landscape-octaves', state.landscape.octaves); setVal('val-landscape-octaves', state.landscape.octaves); setVal('landscape-persistence', state.landscape.persistence); setVal('val-landscape-persistence', state.landscape.persistence); setVal('landscape-lacunarity', state.landscape.lacunarity); setVal('val-landscape-lacunarity', state.landscape.lacunarity); setVal('landscape-sea-level', state.landscape.seaLevel); setVal('val-landscape-sea-level', state.landscape.seaLevel); setVal('landscape-noise-scale', state.landscape.noiseScale); setVal('val-landscape-noise-scale', state.landscape.noiseScale); setCheck('landscape-use-fade', useFade); setDisplay('landscape-fade-radius-container', useFade); setVal('landscape-fade-radius', state.landscape.fadeRadius !== undefined ? state.landscape.fadeRadius : 0.5); setVal('val-landscape-fade-radius', state.landscape.fadeRadius !== undefined ? state.landscape.fadeRadius : 0.5);
         setVal('cam-rot-x', state.cam.rotX); setVal('cam-rot-y', state.cam.rotY);
 
         document.querySelectorAll('.preset-btn').forEach((btn, idx) => {
@@ -2163,11 +2166,12 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'value': noiseGenerator = new ValueNoise(rng); break;
             case 'turbulence': noiseGenerator = new TurbulenceNoise(SimplexNoise, rng); break;
             case 'ridged': noiseGenerator = new RidgedMultifractalNoise(SimplexNoise, rng); break;
-            case 'island-simplex': noiseGenerator = new SimplexNoise(rng); break;
+            case 'island-simplex':
             case 'simplex': default: noiseGenerator = new SimplexNoise(rng); break;
         }
         const amplitude = landscapeState.amplitude, octaves = landscapeState.octaves, persistence = landscapeState.persistence, lacunarity = landscapeState.lacunarity, seaLevel = landscapeState.seaLevel, noiseScale = landscapeState.noiseScale;
         const offsetX = rng() * 10000, offsetZ = rng() * 10000;
+        const useFade = landscapeState.useFade !== undefined ? landscapeState.useFade : (landscapeState.noiseType === 'island-simplex');
         const fadeRadius = landscapeState.fadeRadius !== undefined ? landscapeState.fadeRadius : 0.5;
         const maxDist = Math.min(width/2, height/2);
         for (let i = 0; i < pos.count; i++) {
@@ -2177,7 +2181,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 y += noiseGenerator.noise3D((x * currentFrequency * noiseScale) + offsetX, (z * currentFrequency * noiseScale) + offsetZ, 0) * currentAmplitude;
                 currentAmplitude *= persistence; currentFrequency *= lacunarity;
             }
-            if (landscapeState.noiseType === 'island-simplex') {
+            if (useFade) {
                 const dist = Math.sqrt(x*x + z*z);
                 const fadeStart = maxDist * fadeRadius;
                 if (dist > fadeStart) {
