@@ -284,7 +284,7 @@
                         <div class="control">
                             <label>Noise Type</label>
                             <select id="landscape-noise-type">
-                                <option value="island-simplex">Island (Simplex)</option>
+                                <option value="simplex">Simplex Noise</option>
                                 <option value="perlin">Perlin Noise</option>
                                 <option value="worley">Worley Noise</option>
                                 <option value="voronoi">Voronoi Noise</option>
@@ -293,11 +293,15 @@
                                 <option value="ridged">Ridged Multifractal Noise</option>
                             </select>
                         </div>
-                        <div class="control" id="landscape-fade-radius-container">
-                            <label>Fade Radius</label>
-                            <div class="range-row">
-                                <input type="range" id="landscape-fade-radius" min="0" max="1" step="0.01" value="0.5">
-                                <input type="number" id="val-landscape-fade-radius" class="val-input" value="0.5">
+                        <div class="control">
+                            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+                                <input type="checkbox" id="landscape-use-fade"> Fade Radius
+                            </label>
+                            <div id="landscape-fade-radius-container" style="display:none; margin-top:5px;">
+                                <div class="range-row">
+                                    <input type="range" id="landscape-fade-radius" min="0" max="1" step="0.01" value="0.5">
+                                    <input type="number" id="val-landscape-fade-radius" class="val-input" value="0.5">
+                                </div>
                             </div>
                         </div>
                         <div class="control">
